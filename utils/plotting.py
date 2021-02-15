@@ -1,20 +1,15 @@
-import numpy as np
 import matplotlib.pyplot as plt
-import seaborn as sns
-import pandas as pd
-from typing import List, DefaultDict
 import re
 
-import matplotlib.patches as mpatches
 from matplotlib.lines import Line2D
 from matplotlib.collections import PatchCollection
 from matplotlib.markers import MarkerStyle
 from matplotlib.patches import Rectangle
 
 
-from experiment_setups import *
-from surfaces import *
-from utils.misc import normalize_array, reverse_normalize, Matrix2D
+from core.experiment_setups import *
+from core.surfaces import *
+from utils.misc import Matrix2D
 
 grid_plot_params = {
     'show_RIS_ids'   : False,
@@ -200,7 +195,7 @@ if __name__ == '__main__':
     #  ELEMENT MATRIX   #
     # # # # # # # # # # #
 
-    r = RIS([0,0,0], (6,6), (3,2), [1,1], [1,1], [2,2], None, None)
+    r = RIS([0,0,0], (6,6), (3,2), [1,1], [1,1], [2,2], ('binary', {}), ('discrete', {'values':[1, np.pi]}))
 
     grid_plot_params['xlims'] = (-1, 13)
     grid_plot_params['ylims'] = (-1, 13)
@@ -217,6 +212,7 @@ if __name__ == '__main__':
     # # # # # # # # # # # # #
     #     POSITION GRID     #
     # # # # # # # # # # # # #
+
     g = PositionGrid.from_ascii('''
     ........*......*...o
     ....................
@@ -245,9 +241,8 @@ if __name__ == '__main__':
 
     grid_shape = np.array((30,30))
     group_shape = np.array((3,2))
-    ris = RIS([0,0,0], grid_shape, group_shape, [1,1], [1,1], [2,2],
-                  StateSpaceFactory('binary', grid_shape//group_shape),
-                  PhaseSpaceFactory('discrete', [0, np.pi]))
+    ris = RIS([0,0,0], (12,12), (3,2), [1,1], [1,1], [2,2], ('binary', {}), ('discrete', {'values':[1, np.pi]}))
+
     ris.set_random_state()
 
     plot_ris_phase(ris.get_phase('2D'))

@@ -2,8 +2,6 @@ from typing import List, Union
 
 import numpy as np
 
-
-from surfaces import RIS
 from utils.misc import normalize_array, Matrix3D
 
 

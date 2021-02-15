@@ -1,9 +1,5 @@
-import pytest
-import numpy as np
-
-
-from experiment_setups import *
-from surfaces import RIS
+from core.experiment_setups import *
+from core.surfaces import RIS
 from utils.plotting import plot_Grid
 
 

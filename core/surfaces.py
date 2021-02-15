@@ -146,8 +146,8 @@ class RIS:
                  element_dimensions   : Union[list, Vector2D, int],
                  in_group_spacing     : Union[list, Vector2D, int],
                  between_group_spacing: Union[list, Vector2D, int],
-                 state_space          : StateSpace,
-                 phase_space          : PhaseSpace,
+                 state_space          : Tuple[str, Dict],
+                 phase_space          : Tuple[str, Dict],
                  id_=None):
         """
         Construct an RIS object.
@@ -166,14 +166,14 @@ class RIS:
             raise ValueError("Expected a 3D position vector")
 
         self.shape                = element_grid_shape                                              # (rows,cols) for the grid of elements
-        self.group_shape          = element_group_size                                              # (rows,cols) for each subgroup of the grid of elements
+        self.group_shape          = element_group_size if element_grid_shape else (1,1)             # (rows,cols) for each subgroup of the grid of elements
         self.element_dimensions   = element_dimensions                                              # (width,height) for each element
         self.position             = position                                                        # 3D position of the RIS (equals to the position of element (0,0) )
         self.id                   = id_ if id_ is not None else id(self)                            # Useful for printing/plotting
-        self.state_space          = state_space                                                     # Allowed values for internal state. Used only for checking when setting values and initializing to random state
-        self.phase_space          = phase_space                                                     # Used to map internal states to phase shifts
         self.total_elements       = np.prod(element_grid_shape)                                     # Number of elements within the grid (some may be dependent - i.e. always have the same state)
         self.num_tunable_elements = self.total_elements // np.prod(element_group_size)              # Number of elements whose state can be set individually. This is the number of groups in the grid.
+        self.phase_space          = PhaseSpaceFactory(phase_space[0], **phase_space[1])             # Used to map internal states to phase shifts
+        self.state_space          = StateSpaceFactory(state_space[0], dimension=self.num_tunable_elements, **state_space[1])  # Allowed values for internal state. Used only for checking when setting values and initializing to random state
         self.element_coordinates  = self.construct_element_coordinates_array(self.position,         # A 2D matrix of shape (total_elements, 3) with the 3D position of each element (Z values are the same)
                                                                              element_grid_shape,
                                                                              element_dimensions,
@@ -271,7 +271,7 @@ class RIS:
         phase_shifts = self.phase_space.calculate_phase_shifts(self.get_state())
 
         if form == '1D':
-            return phase_shifts.repeat(phase_shifts, num_dependent_elements_per_group)
+            return np.repeat(phase_shifts, num_dependent_elements_per_group)
 
         elif form == '2D':
             matrix_shape = (self.shape[0]//self.group_shape[0], self.shape[1]//self.group_shape[1])
