@@ -28,16 +28,24 @@ def calc_pathloss(tx_location,
 
 
 
+
+
+
+
 class Link:
-    def __init__(self, sender_coordinates: Matrix2D, receiver_coordinates: Matrix2D):
-        self.sender_coordinates   = sender_coordinates
-        self.receiver_coordinates = receiver_coordinates
+    def __init__(self):
+        self.sender_coordinates   = None
+        self.receiver_coordinates = None
+        self.num_senders          = None
+        self.num_receivers        = None
+
+
+    def initialize(self, sender_coordinates: Matrix2D, receiver_coordinates: Matrix2D):
+        self.sender_coordinates   = np.array(sender_coordinates)
+        self.receiver_coordinates = np.array(receiver_coordinates)
         self.num_senders          = self.sender_coordinates.shape[0]
         self.num_receivers        = self.receiver_coordinates.shape[0]
 
-
-    def initialize(self):
-        raise NotImplemented
 
     def get_transmission_matrix(self)->Matrix2D:
         raise NotImplemented
@@ -51,17 +59,21 @@ class Link:
 
 
 class GaussianFadeLink(Link):
-    def __init__(self,  sender_coordinates: Matrix2D, receiver_coordinates: Matrix2D, mult_factor: float, isLOS=True):
-        super().__init__(sender_coordinates, receiver_coordinates)
+    def __init__(self,  mult_factor: float, isLOS=True):
+        super().__init__()
         self.mult_factor         = mult_factor
         self.isLOS               = isLOS
-        self.fades               = np.empty((self.num_senders, self.num_receivers))
+        self.fades               = None
+        self.path_losses         = None
+        self.transmission_matrix = None
+
+    def initialize(self, sender_coordinates: Matrix2D, receiver_coordinates: Matrix2D,):
+        super().initialize(sender_coordinates, receiver_coordinates)
+
+        self.fades               = sample_gaussian_complex_matrix((self.num_senders, self.num_receivers)) / np.sqrt(2)
         self.path_losses         = np.empty_like(self.fades)
         self.transmission_matrix = np.empty_like(self.fades)
 
-
-    def initialize(self):
-        self.fades       = sample_gaussian_complex_matrix(self.fades.shape) / np.sqrt(2)
         for i in range(self.num_senders):
             for j in range(self.num_receivers):
                 self.path_losses[i,j] = calc_pathloss(self.sender_coordinates[i,:],
@@ -78,34 +90,28 @@ class GaussianFadeLink(Link):
 
 class Channel:
     def __init__(self,
-                 position_grid        : PositionGrid,
-                 ris_list             : List[RIS],
-                 num_elements_per_ris : int,
+                 TX_position          : Vector3D,
+                 RX_position          : Vector3D,
                  TX_RIS_link_info     : Tuple[Type[Link], Dict],
                  RX_RIS_link_info     : Tuple[Type[Link], Dict],
                  TX_RX_link_info      : Tuple[Type[Link], Dict],
                  noise_power          : float):
 
-        assert position_grid.num_RX == 1, 'Currently only supporting channel of a single RX.'
-        assert position_grid.num_TX == 1, 'Currently only supporting channel of a single TX.'
 
-        self.position_grid           = position_grid
-        self.noise_power             = noise_power
-        self.ris_list                = ris_list
-        self.num_elements_per_ris    = num_elements_per_ris
-        self.all_ris_elements_coords = self.get_combined_elements_coordinates(self.ris_list)
+        self.tx_position             = TX_position              # type: Vector3D
+        self.rx_position             = RX_position              # type: Vector3D
+        self.noise_power             = noise_power              # type: float
 
         link_type, link_args         = TX_RIS_link_info
-        self.TX_RIS_link             = link_type(self.position_grid.TX_positions, self.all_ris_elements_coords, **link_args)
+        self.TX_RIS_link             = link_type(**link_args)   # type: Link
 
         link_type, link_args         = RX_RIS_link_info
-        self.RX_RIS_link             = link_type(self.all_ris_elements_coords, self.position_grid.RX_positions, **link_args)
+        self.RX_RIS_link             = link_type(**link_args)   # type: Link
 
         link_type, link_args         = TX_RX_link_info
-        self.TX_RX_link              = link_type(self.position_grid.TX_positions, self.position_grid.RX_positions, **link_args)
+        self.TX_RX_link              = link_type(**link_args)   # type: Link
 
-
-        self.ris_phases              = None             # type: Vector # length: num_elements_per_ris * num_ris
+        self.ris_phases              = None                     # type: Vector # length: num_elements_per_ris * num_ris
 
 
 
@@ -113,52 +119,68 @@ class Channel:
     def get_combined_elements_coordinates(ris_list: List[RIS]):
         return np.concatenate([ris.get_element_coordinates() for ris in ris_list], axis=0)
 
+    @staticmethod
+    def get_combined_ris_phase(ris_list: List[RIS]):
+        return np.concatenate([ris.get_phase('1D') for ris in ris_list])
+
+    # @property
+    # def H(self)->Matrix2D: # shape: (K,1)
+    #     H = self.TX_RIS_link.get_transmission_matrix()
+    #     return H
+    # @property
+    # def G(self)->Matrix2D: # shape (1,K)
+    #     G =  self.RX_RIS_link.get_transmission_matrix()
+    #     return G
+    #
+    # @property
+    # def h(self)->Vector:  # shape: (1,1)
+    #     h = self.TX_RX_link.get_transmission_matrix()
+    #     return h
+    #
+    # @property
+    # def Phi(self)->Matrix2D: # shape: (K,K)
+    #     Phi = np.diag(self.ris_phases)
+    #     return Phi
+    #
+    #
+    # def set_RIS_phases(self, ris_list: List[RIS]):
+    #     def are_all_phases_of_equal_length(ris_phases: List[Vector]):
+    #         return all(len(i) == len(ris_phases[0]) for i in ris_phases)
+    #
+    #     ris_phases_1D = [ris.get_phase('1D') for ris in ris_list]
+    #     assert are_all_phases_of_equal_length(ris_phases_1D), 'Currently only supporting RISs with phases of equal length.'
+    #
+    #     self.ris_phases = np.concatenate(ris_phases_1D)
 
 
-    @property
-    def H(self)->Matrix2D: # shape: (K,1)
-        H = self.TX_RIS_link.get_transmission_matrix()
-        return H
-    @property
-    def G(self)->Matrix2D: # shape (1,K)
-        G =  self.RX_RIS_link.get_transmission_matrix()
-        return G
-
-    @property
-    def h(self)->Vector:  # shape: (1,1)
-        h = self.TX_RX_link.get_transmission_matrix()
-        return h
-
-    @property
-    def Phi(self)->Matrix2D: # shape: (K,K)
-        Phi = np.diag(self.ris_phases)
-        return Phi
-
-
-
-    def set_RIS_phases(self, ris_list: List[RIS]):
-        def are_all_phases_of_equal_length(ris_phases: List[Vector]):
-            return all(len(i) == len(ris_phases[0]) for i in ris_phases)
-
-        ris_phases_1D = [ris.get_phase('1D') for ris in ris_list]
-        assert are_all_phases_of_equal_length(ris_phases_1D), 'Currently only supporting RISs with phases of equal length.'
-
-        self.ris_phases = np.concatenate(ris_phases_1D)
-
-
-
-    def simulate_transmission(self):
-        self.TX_RIS_link.initialize()
-        self.RX_RIS_link.initialize()
-        self.TX_RX_link.initialize()
-
-
-    def get_SNR(self):
-        channel_reflected = self.G @ self.Phi @ self.H + self.h # The @ operator denotes matrix multiplication (Python >= 3.5 - PEP 465)
-        # todo: PL_TX_RX is not modelled here
-
+    def _calculate_SNR(self, H, Phi, G, h):
+        channel_reflected = G @ Phi @ H + h # The @ operator denotes matrix multiplication (Python >= 3.5 - PEP 465)
         snr = np.power(np.absolute(channel_reflected), 2) / self.noise_power
         return float(snr)
+
+
+
+    def simulate_transmission(self, ris_list: List[RIS], combined_RIS_phase=None):
+
+        ris_element_coordinates = self.get_combined_elements_coordinates(ris_list)
+
+        if combined_RIS_phase is not None:
+            ris_phases = combined_RIS_phase
+            if len(ris_phases) != sum([ris.total_elements for ris in ris_list]) :
+                raise ValueError("Combined RIS phase does not equal to the total number of independent RIS elements.")
+        else:
+            ris_phases = self.get_combined_ris_phase(ris_list)
+
+        self.TX_RIS_link.initialize([self.tx_position]     , ris_element_coordinates)
+        self.RX_RIS_link.initialize(ris_element_coordinates, [self.rx_position])
+        self.TX_RX_link.initialize([self.tx_position]      , [self.rx_position])
+
+        H   = self.TX_RIS_link.get_transmission_matrix() # shape: (K,1)
+        G   = self.RX_RIS_link.get_transmission_matrix() # shape: (1,K)
+        h   = self.TX_RX_link.get_transmission_matrix()  # shape: (1,1)
+        Phi = np.diag(ris_phases)                        # shape: (K,K)
+
+        return self._calculate_SNR (H, Phi, G, h)
 
 
 

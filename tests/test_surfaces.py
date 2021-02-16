@@ -65,7 +65,6 @@ def test_RIS_constructor():
              (1, 1),
              (1, 1),
              (2, 2),
-             ('binary', {}),
              ('discrete', {'values':[1, np.pi]})
              )
 

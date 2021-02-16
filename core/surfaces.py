@@ -1,3 +1,5 @@
+import itertools
+
 import numpy as np
 from typing import *
 from utils.misc import convert2array, expand_array, Vector3D, Vector2D, Matrix3D
@@ -24,17 +26,21 @@ StateSpace = spaces.Space
 
 class DiscreteStateSpace(spaces.MultiDiscrete):
     '''A multi-dimensional space of discrete values {0,1,...} (same for each dimension)'''
-    def __init__(self, dimension: int, num_values: int):
+    def __init__(self, dimension: int, num_values: int, *args, **kwargs):
+        self.dimension = dimension
+        self.num_values = num_values
         super().__init__([num_values]*dimension)
 
 class BinaryStateSpace(spaces.MultiBinary):
     '''A multi-dimensional binary space'''
-    def __init__(self, dimension: int):
+    def __init__(self, dimension: int, *args, **kwargs):
+        self.dimension = dimension
+        self.num_values = 2
         super().__init__(dimension)
 
 class ContinuousStateSpace(spaces.Box):
     '''A continuous space with potentially different bounds in each dimension'''
-    def __init__(self, low: List[float], high: List[float], shape=None, dtype=np.float32):
+    def __init__(self, low: List[float], high: List[float], shape=None, dtype=np.float32, *args, **kwargs):
         super().__init__(low, high, shape, dtype)
 
 
@@ -146,7 +152,6 @@ class RIS:
                  element_dimensions   : Union[list, Vector2D, int],
                  in_group_spacing     : Union[list, Vector2D, int],
                  between_group_spacing: Union[list, Vector2D, int],
-                 state_space          : Tuple[str, Dict],
                  phase_space          : Tuple[str, Dict],
                  id_=None):
         """
@@ -157,7 +162,6 @@ class RIS:
         :param element_dimensions: A tuple of (width, height) with the dimensions of each element.
         :param in_group_spacing:   A tuple of (width, height) specifying the spacing between consecutive elements in the same group.
         :param between_group_spacing: A tuple of (width, height) specifying the spacing between the ending and starting elements between consecutive groups.
-        :param state_space: A StateSpace object that signifies allowed values for the internal state.
         :param phase_space: A PhaseSpace object that signifies allowed values for the effective time shifts.
         :param id_: An identification token for this specific RIS. If not provided, python's id(self) will be used.
         """
@@ -173,7 +177,7 @@ class RIS:
         self.total_elements       = np.prod(element_grid_shape)                                     # Number of elements within the grid (some may be dependent - i.e. always have the same state)
         self.num_tunable_elements = self.total_elements // np.prod(element_group_size)              # Number of elements whose state can be set individually. This is the number of groups in the grid.
         self.phase_space          = PhaseSpaceFactory(phase_space[0], **phase_space[1])             # Used to map internal states to phase shifts
-        self.state_space          = StateSpaceFactory(state_space[0], dimension=self.num_tunable_elements, **state_space[1])  # Allowed values for internal state. Used only for checking when setting values and initializing to random state
+        self.state_space          = StateSpaceFactory(phase_space[0], dimension=self.num_tunable_elements, num_values=len(self.phase_space.values), **phase_space[1])  # Allowed values for internal state. Used only for checking when setting values and initializing to random state
         self.element_coordinates  = self.construct_element_coordinates_array(self.position,         # A 2D matrix of shape (total_elements, 3) with the 3D position of each element (Z values are the same)
                                                                              element_grid_shape,
                                                                              element_dimensions,
@@ -301,6 +305,8 @@ class RIS:
     #         [self.element_coordinates[:, :, 1].min(), self.element_coordinates[:, :, 1].max()+self.element_coordinates[1]],
     #         [self.element_coordinates[:, :, 2].min(), self.element_coordinates[:, :, 2].max()],
     #     ])
+
+
 
 
 

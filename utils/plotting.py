@@ -195,7 +195,7 @@ if __name__ == '__main__':
     #  ELEMENT MATRIX   #
     # # # # # # # # # # #
 
-    r = RIS([0,0,0], (6,6), (3,2), [1,1], [1,1], [2,2], ('binary', {}), ('discrete', {'values':[1, np.pi]}))
+    r = RIS([0,0,0], (6,6), (3,2), [1,1], [1,1], [2,2], ('discrete', {'values':[1, np.pi]}))
 
     grid_plot_params['xlims'] = (-1, 13)
     grid_plot_params['ylims'] = (-1, 13)
@@ -241,7 +241,7 @@ if __name__ == '__main__':
 
     grid_shape = np.array((30,30))
     group_shape = np.array((3,2))
-    ris = RIS([0,0,0], (12,12), (3,2), [1,1], [1,1], [2,2], ('binary', {}), ('discrete', {'values':[1, np.pi]}))
+    ris = RIS([0,0,0], (12,12), (3,2), [1,1], [1,1], [2,2], ('discrete', {'values':[1, np.pi]}))
 
     ris.set_random_state()
 
