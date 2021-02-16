@@ -16,10 +16,10 @@ pathlossExponentNLOS    = 3.67
 
 
 # RIS
-total_elements       = 16 # prefer square
-dependent_elements   = 9  # us a perfect square
-total_surfaces       = 8
-elements_per_surface = total_elements/total_surfaces
+total_elements       = (144,1) # prefer square
+dependent_elements   = (9,1)  # us a perfect square
+total_surfaces       = 1
+#elements_per_surface = total_elements/total_surfaces
 
 
 
