@@ -5,7 +5,7 @@ from tqdm import tqdm
 
 from core.surfaces import *
 from core.channels import *
-from core.experiment_setups import *
+from core.geometry import *
 
 
 def iterate_combined_state(ris_list: List[RIS]):

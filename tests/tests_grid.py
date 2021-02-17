@@ -1,4 +1,4 @@
-from core.experiment_setups import *
+from core.geometry import *
 from core.surfaces import RIS
 from utils.plotting import plot_Grid
 

@@ -4,7 +4,7 @@ from scipy import stats
 
 
 from core.surfaces import RIS
-from core.experiment_setups import PositionGrid
+from core.geometry import PositionGrid
 from core.channels import Channel, GaussianFadeLink
 from core.exhaustive_phase_search import find_RIS_configuration_that_maximizes_SNR
 import core.globals as globals

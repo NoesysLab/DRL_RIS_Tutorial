@@ -7,7 +7,7 @@ from matplotlib.markers import MarkerStyle
 from matplotlib.patches import Rectangle
 
 
-from core.experiment_setups import *
+from core.geometry import *
 from core.surfaces import *
 from utils.misc import Matrix2D
 
@@ -67,18 +67,19 @@ def mscatter(x,y,ax=None, m=None, **kw):
 
 
 
-def plot_Grid(grid: PositionGrid, ax=None, params: DefaultDict=None):
+def plot_Grid(RIS_positions, TX_positions, RX_positions, ax=None, params: DefaultDict=None):
     if params is None: params = grid_plot_params
 
     if ax is None:
         fig, ax = plt.subplots()
 
 
+    num_RIS = RIS_positions.shape[0]
+    num_TX = TX_positions.shape[0]
+    num_RX = RX_positions.shape[0]
 
-
-
-    all_coords = np.vstack([grid.RIS_positions, grid.TX_positions, grid.RX_positions])
-    labels     = [params['RIS_symbol']]*grid.num_RIS + [params['TX_symbol']]*grid.num_TX + [params['RX_symbol']]*grid.num_RX
+    all_coords = np.vstack([RIS_positions, TX_positions, RX_positions])
+    labels     = [params['RIS_symbol']]*num_RIS + [params['TX_symbol']]*num_TX + [params['RX_symbol']]*num_RX
     sizes      = [params['scale']]*all_coords.shape[0]
 
 
@@ -88,9 +89,9 @@ def plot_Grid(grid: PositionGrid, ax=None, params: DefaultDict=None):
         params['RX_color'] = 'k'
         colors = all_coords[:,2]
     else:
-        colors = [params['RIS_color']] * grid.num_RIS + \
-                 [params['TX_color']] * grid.num_TX + \
-                 [params['RX_color']] * grid.num_RX
+        colors = [params['RIS_color']] * num_RIS + \
+                 [params['TX_color']] * num_TX + \
+                 [params['RX_color']] * num_RX
 
 
     scatter = mscatter(all_coords[:,0], all_coords[:,1], ax=ax,
@@ -213,7 +214,7 @@ if __name__ == '__main__':
     #     POSITION GRID     #
     # # # # # # # # # # # # #
 
-    g = PositionGrid.from_ascii('''
+    RIS_positions, TX_positions, RX_positions = from_ascii('''
     ........*......*...o
     ....................
     ....................
@@ -228,7 +229,7 @@ if __name__ == '__main__':
 
     grid_plot_params['xlims'] = None
     grid_plot_params['ylims'] = None
-    plot_Grid(g)
+    plot_Grid(RIS_positions, TX_positions, RX_positions)
     plt.show()
 
 

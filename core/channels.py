@@ -4,7 +4,7 @@ from typing import *
 
 from core import globals
 from core.surfaces import RIS
-from core.experiment_setups import PositionGrid
+from core.geometry import PositionGrid
 from utils.misc import Vector, Matrix2D, convert2array, Vector3D
 from utils.complex import sample_gaussian_complex_matrix
 
