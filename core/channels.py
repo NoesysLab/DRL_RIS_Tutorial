@@ -4,7 +4,6 @@ from typing import *
 
 from core import globals
 from core.surfaces import RIS
-from core.geometry import PositionGrid
 from utils.misc import Vector, Matrix2D, convert2array, Vector3D
 from utils.complex import sample_gaussian_complex_matrix
 
@@ -180,9 +179,13 @@ class Channel:
         h   = self.TX_RX_link.get_transmission_matrix()  # shape: (1,1)
         Phi = np.diag(ris_phases)                        # shape: (K,K)
 
-        return self._calculate_SNR (H, Phi, G, h)
+        snr      = self._calculate_SNR (H, Phi, G, h)
+        angle_TX = np.angle(H)
+        mag_TX   = np.abs(H)
+        angle_RX = np.angle(G)
+        mag_RX   = np.abs(G)
 
-
+        return snr, angle_TX, mag_TX, angle_RX, mag_RX
 
 
 

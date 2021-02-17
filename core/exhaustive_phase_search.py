@@ -45,7 +45,7 @@ def find_RIS_configuration_that_maximizes_SNR(ris_list: List[RIS], channel: Chan
 
         phase = phase_space.calculate_phase_shifts(configuration)
         phase = np.repeat(phase, repeats=num_dependent_elements)
-        snr   = channel.simulate_transmission(ris_list, combined_RIS_phase=phase)
+        snr   = channel.simulate_transmission(ris_list, combined_RIS_phase=phase)[0]
 
         if snr > best_snr:
             best_snr = snr
