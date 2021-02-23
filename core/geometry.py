@@ -1,5 +1,5 @@
-from typing import List, Union
-
+from typing import *
+from math import floor, ceil, sqrt
 import numpy as np
 
 from utils.misc import normalize_array, Matrix3D
@@ -137,3 +137,27 @@ def from_ascii(ascii_grid: str,
 
 
 
+
+def get_2D_positions_on_square_grid(num_positions: int, xy_center: Tuple[float,float], width: float, z_value:Union[float,Iterable]=None):
+
+    num_x_positions     = ceil(sqrt(num_positions))
+    num_y_positions     = floor(sqrt(num_positions))
+
+    start_x             = xy_center[0] - width/2
+    end_x               = xy_center[0] + width/2
+    start_y             = xy_center[1] - width/2
+    end_y               = xy_center[1] + width/2
+
+    xs                  = np.linspace(start_x, end_x, num_x_positions)
+    ys                  = np.linspace(start_y, end_y, num_y_positions)
+
+    X, Y                = np.meshgrid(xs, ys)
+
+    positions_grid      = np.empty(shape=(num_positions, 3 if z_value is not None else 2))
+    positions_grid[:,0] = X.flatten()
+    positions_grid[:,1] = Y.flatten()
+
+    if z_value is not None:
+        positions_grid[:,2] = z_value
+
+    return positions_grid

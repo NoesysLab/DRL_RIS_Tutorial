@@ -7,7 +7,7 @@ from core.surfaces import RIS
 from core.channels import Channel, GaussianFadeLink
 from core.exhaustive_phase_search import find_RIS_configuration_that_maximizes_SNR
 import core.globals as globals
-from utils.plotting import plot_Grid
+from utils.plotting import plot_positions
 
 
 import matplotlib.pyplot as plt
@@ -35,7 +35,7 @@ if __name__ == '__main__':
     ris_list = [r1]
 
 
-    plot_Grid(ris_coords, np.array([tx_coords]), np.array([rx_coords]))
+    plot_positions(ris_coords, np.array([tx_coords]), np.array([rx_coords]))
     plt.show()
 
     r1.set_random_state()

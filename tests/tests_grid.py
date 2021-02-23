@@ -1,6 +1,6 @@
 from core.geometry import *
 from core.surfaces import RIS
-from utils.plotting import plot_Grid
+from utils.plotting import plot_positions
 
 
 
@@ -81,4 +81,4 @@ x..................o
 
 def test_plot():
     grid = PositionGrid(ris_list, tx, rx)
-    plot_Grid(grid)
+    plot_positions(grid)

@@ -1,4 +1,6 @@
 import matplotlib.pyplot as plt
+import matplotlib
+from mpl_toolkits.mplot3d import axes3d, Axes3D
 import re
 
 from matplotlib.lines import Line2D
@@ -25,7 +27,8 @@ grid_plot_params = {
     'ylims'          : None, # tuple of (min, max)
     'grid'           : True,
     'element_color'  : 'black',
-    'alpha'          : 0.7
+    'alpha'          : 0.7,
+    '3D'             : False,
 }
 
 
@@ -48,10 +51,14 @@ def _fix_height_legend(handles, labels, heights, params):
     labels = list(map(lambda n: '$\\mathdefault{'+str(n)+"}$", label_numbers))
     return handles, labels
 
-def mscatter(x,y,ax=None, m=None, **kw):
+def mscatter(x,y, z=None, ax=None, m=None, **kw):
     import matplotlib.markers as mmarkers
     if not ax: ax=plt.gca()
-    sc = ax.scatter(x,y,**kw)
+
+    if z is None:
+        sc = ax.scatter(x,y,**kw)
+    else:
+        sc = ax.scatter(x,y,z, **kw)
     if (m is not None) and (len(m)==len(x)):
         paths = []
         for marker in m:
@@ -67,12 +74,16 @@ def mscatter(x,y,ax=None, m=None, **kw):
 
 
 
-def plot_Grid(RIS_positions, TX_positions, RX_positions, ax=None, params: DefaultDict=None):
+def plot_positions(RIS_positions, TX_positions, RX_positions, ax=None, params: DefaultDict=None):
     if params is None: params = grid_plot_params
 
     if ax is None:
-        fig, ax = plt.subplots()
-
+        if params['3D']:
+            matplotlib.use('TkAgg')
+            fig = plt.figure()
+            ax = Axes3D(fig)
+        else:
+            fig, ax = plt.subplots()
 
     num_RIS = RIS_positions.shape[0]
     num_TX = TX_positions.shape[0]
@@ -83,7 +94,7 @@ def plot_Grid(RIS_positions, TX_positions, RX_positions, ax=None, params: Defaul
     sizes      = [params['scale']]*all_coords.shape[0]
 
 
-    if params['color_by_height']:
+    if params['color_by_height'] and not params['3D']:
         params['RIS_color'] = 'k'
         params['TX_color'] = 'k'
         params['RX_color'] = 'k'
@@ -94,8 +105,13 @@ def plot_Grid(RIS_positions, TX_positions, RX_positions, ax=None, params: Defaul
                  [params['RX_color']] * num_RX
 
 
-    scatter = mscatter(all_coords[:,0], all_coords[:,1], ax=ax,
-               s=sizes, c=colors, m=labels)
+
+    if params['3D']:
+        scatter = mscatter(all_coords[:,0], all_coords[:,1], all_coords[:,2], ax=ax,
+                           s=sizes, c=colors, m=labels)
+    else:
+        scatter = mscatter(all_coords[:,0], all_coords[:,1], ax=ax,
+                           s=sizes, c=colors, m=labels)
 
 
     legend_elements = [
@@ -107,19 +123,16 @@ def plot_Grid(RIS_positions, TX_positions, RX_positions, ax=None, params: Defaul
 
     ax.add_artist(legend1)
 
-    # handles, labels = scatter.legend_elements(prop="sizes", alpha=0.6)
-    # handles, labels = _fix_height_legend(handles, labels, all_coords[:,2], params)
-    # legend2 = ax.legend(handles, labels, loc="lower left", title=r"$y \ (m)$")
 
-    # legend_elements = _set_up_height_legend(all_coords[:,2], params)
-    # ax.legend(handles=legend_elements, loc='lower left')
-
-    if params['color_by_height']:
+    if params['color_by_height'] and not params['3D']:
         cbar = plt.colorbar(scatter)
         cbar.ax.set_ylabel(r'$z \ (m)$', rotation=90)
 
     ax.set_xlabel(r'$x \ (m)$')
     ax.set_ylabel(r'$y \ (m)$')
+
+    if params['3D']:
+        ax.set_zlabel(r'$z \ (m)$', rotation=90)
 
     if params['xlims']: ax.set_xlim(params['xlims'])
     if params['ylims']: ax.set_ylim(params['ylims'])
@@ -227,11 +240,12 @@ if __name__ == '__main__':
     scale_x=3.7,
     scale_y=4.5)
 
+
+    grid_plot_params['2D'] = True
     grid_plot_params['xlims'] = None
     grid_plot_params['ylims'] = None
-    plot_Grid(RIS_positions, TX_positions, RX_positions)
-    plt.show()
-
+    plot_positions(RIS_positions, TX_positions, RX_positions)
+    plt.show(block=False)
 
 
     #############################################################
@@ -247,4 +261,4 @@ if __name__ == '__main__':
     ris.set_random_state()
 
     plot_ris_phase(ris.get_phase('2D'))
-    plt.show()
+    plt.show(block=True)
