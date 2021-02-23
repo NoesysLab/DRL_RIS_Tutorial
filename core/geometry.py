@@ -2,7 +2,7 @@ from typing import *
 from math import floor, ceil, sqrt
 import numpy as np
 
-from utils.misc import normalize_array, Matrix3D
+from utils.misc import normalize_array, Matrix3DCoordinates
 
 
 
@@ -22,7 +22,7 @@ def digitize_coords(coords: np.array, num: int)->np.array:
 
 
 
-def apply_transformation(coordinates: Matrix3D, rotate_matrix=None, shift_vector=None):
+def apply_transformation(coordinates: Matrix3DCoordinates, rotate_matrix=None, shift_vector=None):
 
     if not rotate_matrix: rotate_matrix = np.eye(coordinates.shape[0])
     if not shift_vector:  shift_vector  = np.array([0,0,0])
@@ -35,7 +35,7 @@ def apply_transformation(coordinates: Matrix3D, rotate_matrix=None, shift_vector
 
 
 
-def grid_to_ascii(RIS_positions: Matrix3D, TX_positions: Matrix3D, RX_positions: Matrix3D, width_chars=20, height_chars=7, return_str=False):
+def grid_to_ascii(RIS_positions: Matrix3DCoordinates, TX_positions: Matrix3DCoordinates, RX_positions: Matrix3DCoordinates, width_chars=20, height_chars=7, return_str=False):
     all_positions = TX_positions
     all_positions = np.vstack([all_positions, TX_positions, RX_positions])
     symbols       = [RIS_SYMBOL]*RIS_positions.shape[0] + \
@@ -138,7 +138,13 @@ def from_ascii(ascii_grid: str,
 
 
 
-def get_2D_positions_on_square_grid(num_positions: int, xy_center: Tuple[float,float], width: float, z_value:Union[float,Iterable]=None):
+def get_random_2D_positions_on_square(num_positions: int, xy_center: Tuple[float,float], width: float, z_value:Union[float,Iterable]=None)->Matrix3DCoordinates:
+    positions        = np.empty(shape=(num_positions, 3))
+    positions[:,0:2] = np.random.random((num_positions, 2))
+    positions[:,2]   = z_value
+    return positions
+
+def get_2D_positions_on_square_grid(num_positions: int, xy_center: Tuple[float,float], width: float, z_value:Union[float,Iterable]=None)->Matrix3DCoordinates:
 
     num_x_positions     = ceil(sqrt(num_positions))
     num_y_positions     = floor(sqrt(num_positions))
@@ -161,3 +167,13 @@ def get_2D_positions_on_square_grid(num_positions: int, xy_center: Tuple[float,f
         positions_grid[:,2] = z_value
 
     return positions_grid
+
+
+
+def get_receiver_positions(placement_type: str, num_positions: int, xy_center: Tuple[float,float], width: float, z_value:Union[float,Iterable]=None)->Matrix3DCoordinates:
+    if placement_type == 'grid':
+        return get_2D_positions_on_square_grid(num_positions, xy_center, width, z_value)
+    elif placement_type == 'random':
+        return get_random_2D_positions_on_square(num_positions, xy_center, width, z_value)
+    else:
+        raise ValueError("Only supporting 'grid' or 'random' placement types.")

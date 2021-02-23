@@ -2,7 +2,7 @@ import itertools
 
 import numpy as np
 from typing import *
-from utils.misc import convert2array, expand_array, Vector3D, Vector2D, Matrix3D
+from utils.misc import convert2array, expand_array, Vector3D, Vector2D, Matrix3DCoordinates
 import gym.spaces as spaces
 import functools
 
@@ -200,7 +200,7 @@ class RIS:
                                             element_dimensions   : Union[list, Vector2D, int],
                                             group_size           : Union[None, Tuple[int, int]],
                                             in_group_spacing     : Union[list, Vector2D, int],
-                                            between_group_spacing: Union[list, Vector2D, int]) -> Matrix3D:
+                                            between_group_spacing: Union[list, Vector2D, int]) -> Matrix3DCoordinates:
         '''For each element in the grid, calculate its coordinates based on the parameters passed to the constructor.
         Only used once by the __init__ method.'''
 
@@ -286,7 +286,7 @@ class RIS:
             raise ValueError("Expected one of {{'1D', '2D'}} for parameter 'form' value. Got {} instead.".format(form))
 
 
-    def get_element_coordinates(self)->Matrix3D:
+    def get_element_coordinates(self)->Matrix3DCoordinates:
         """
         Get all coordinates of the elements of the grid of the RIS.
         :return: Array of shape (num_elements, 3) where each row is the x,y,z coordinates for each element
