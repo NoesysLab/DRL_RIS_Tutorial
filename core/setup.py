@@ -4,7 +4,7 @@ import yaml
 
 from core.geometry import get_receiver_positions
 from core.surfaces import RIS
-from core.channels import GaussianFadeLink, Channel
+from core.channels import RayleighFadeLink, Channel
 from utils.custom_types import *
 
 light_speed = 299792458  # Unit: m/s
@@ -202,11 +202,11 @@ def initialize_simulation_from_setup(setup: Setup)->Tuple[List[RIS], Tuple[Chann
         RIS_list.append(ris)
 
 
-    TX_RIS_link_info = (GaussianFadeLink, {'mult_factor': setup.TX_RIS_link_mult_factor,
+    TX_RIS_link_info = (RayleighFadeLink, {'mult_factor': setup.TX_RIS_link_mult_factor,
                                            'isLOS': setup.TX_RIS_link_is_LOS})
-    RX_RIS_link_info = (GaussianFadeLink, {'mult_factor': setup.RX_RIS_link_mult_factor,
+    RX_RIS_link_info = (RayleighFadeLink, {'mult_factor': setup.RX_RIS_link_mult_factor,
                                            'isLOS': setup.RX_RIS_link_is_LOS})
-    TX_RX_link_info  = (GaussianFadeLink, {'mult_factor': setup.TX_RX_link_mult_factor,
+    TX_RX_link_info  = (RayleighFadeLink, {'mult_factor': setup.TX_RX_link_mult_factor,
                                            'isLOS': setup.TX_RX_link_is_LOS})
 
     train_RX_locations = get_receiver_positions(setup.train_RX_placement_type,

@@ -57,7 +57,7 @@ class Link:
 
 
 
-class GaussianFadeLink(Link):
+class RayleighFadeLink(Link):
     def __init__(self,  mult_factor: float, isLOS=True):
         super().__init__()
         self.mult_factor         = mult_factor

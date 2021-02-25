@@ -3,7 +3,7 @@ from scipy import stats
 
 from core.setup import Setup, initialize_simulation_from_setup
 from core.surfaces import RIS
-from core.channels import Channel, GaussianFadeLink
+from core.channels import Channel, RayleighFadeLink
 from core.exhaustive_phase_search import find_RIS_configuration_that_maximizes_SNR
 import core.globals as globals
 from utils.plotting import plot_positions
@@ -24,9 +24,9 @@ if __name__ == '__main__':
     # tx_coords        = globals.TX_location
     # rx_coords        = globals.RX_location
     # mult_factor      = globals.mult_fact
-    # tx_ris_link_info = (GaussianFadeLink, {'mult_factor': mult_factor, 'isLOS': True})
-    # ris_rx_link_info = (GaussianFadeLink, {'mult_factor': mult_factor, 'isLOS': True})
-    # tx_rx_link_info  = (GaussianFadeLink, {'mult_factor': mult_factor, 'isLOS': False})
+    # tx_ris_link_info = (RayleighFadeLink, {'mult_factor': mult_factor, 'isLOS': True})
+    # ris_rx_link_info = (RayleighFadeLink, {'mult_factor': mult_factor, 'isLOS': True})
+    # tx_rx_link_info  = (RayleighFadeLink, {'mult_factor': mult_factor, 'isLOS': False})
     # noise_power      = globals.noisePower
     # r1               = RIS(ris_coords[0, :], ris_elements, groups_of, element_size, in_group_dist, out_group_dist, phase_space)
     #
