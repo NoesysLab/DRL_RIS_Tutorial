@@ -13,47 +13,30 @@ import matplotlib.pyplot as plt
 
 if __name__ == '__main__':
 
-    # ris_elements     = globals.total_elements
-    # groups_of        = globals.dependent_elements
-    # number_surfaces  = globals.total_surfaces
-    # element_size     = [globals.wavelength/2, globals.wavelength/2]
-    # in_group_dist    = [globals.wavelength, globals.wavelength]
-    # out_group_dist   = [globals.wavelength, globals.wavelength]
-    # phase_space      = ('discrete', {'values': [np.exp(1j*0), np.exp(1j*np.pi)]})
-    # ris_coords       = np.array([[10, 10, 2],])
-    # tx_coords        = globals.TX_location
-    # rx_coords        = globals.RX_location
-    # mult_factor      = globals.mult_fact
-    # tx_ris_link_info = (RayleighFadeLink, {'mult_factor': mult_factor, 'isLOS': True})
-    # ris_rx_link_info = (RayleighFadeLink, {'mult_factor': mult_factor, 'isLOS': True})
-    # tx_rx_link_info  = (RayleighFadeLink, {'mult_factor': mult_factor, 'isLOS': False})
-    # noise_power      = globals.noisePower
-    # r1               = RIS(ris_coords[0, :], ris_elements, groups_of, element_size, in_group_dist, out_group_dist, phase_space)
-    #
-    #
-    # ris_list = [r1]
-    #
-    #
-    # plot_positions(ris_coords, np.array([tx_coords]), np.array([rx_coords]))
-    # plt.show()
-    #
-    # r1.set_random_state()
+
+
+    dh           = 20
+    x1 = x2 = y1 = 25
+    y2           = 35
+    isWall       = False
+    Power        = 1
 
     setup = Setup.from_config({'test': {
-        'num_RIS': 3,
-        'RIS_coordinates': [[0,0,0],[1,1,1],[2,2,2]],
-        'RIS_elements': (4,4),
-        'RIS_element_groups': (2,2),
-        'RIS_phase_values': [-1, 1],
-        'TX_locations'    : [-1,-1,-1],
-        'TX_RIS_link_mult_factor': 1,
-        'RX_RIS_link_mult_factor': 1,
-        'TX_RX_link_mult_factor': 1,
-        'train_RX_square_center': (10,10),
-        'train_RX_square_width' : 1,
+        'num_RIS'                : 4,
+        'RIS_coordinates'        : [[dh-5,25,2], [dh-5,-35 ,2], [x1,y1,2], [x2,y2,2]],
+        'RIS_elements'           : (8,8),
+        'RIS_element_groups'     : (4,1),
+        'RIS_phase_values'       : [np.exp(1j*0), np.exp(1j*1)],
+        'TX_locations'           : [0,30,2],
+        'TX_RIS_link_mult_factor': Power,
+        'RX_RIS_link_mult_factor': Power,
+        'TX_RX_link_mult_factor' : Power,
+        'TX_RX_link_is_LOS'      : not isWall,
+        'train_RX_square_center' : (20,30),
+        'train_RX_square_width'  : 1,
         'train_RX_num_positions' : 100,
         'train_RX_height'        : 1,
-        'noise_power'            : 1,
+        'noise_power'            : 100,
         }})
 
     RIS_list,\
@@ -69,9 +52,9 @@ if __name__ == '__main__':
     occurancies = dict()
 
     N = 10
-    for _ in range(N):
+    for _ in range(1):
 
-        best_configuration, best_snr = find_RIS_configuration_that_maximizes_SNR(RIS_list, ch)
+        best_configuration, best_snr = find_RIS_configuration_that_maximizes_SNR(RIS_list, ch, show_progress_bar=False)
 
         if best_configuration in occurancies.keys():
             occurancies[best_configuration] += 1

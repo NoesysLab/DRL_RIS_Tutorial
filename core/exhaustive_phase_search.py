@@ -23,7 +23,7 @@ def iterate_combined_state(ris_list: List[RIS]):
 
 
 
-def find_RIS_configuration_that_maximizes_SNR(ris_list: List[RIS], channel: Channel):
+def find_RIS_configuration_that_maximizes_SNR(ris_list: List[RIS], channel: Channel, show_progress_bar=False):
 
     def all_ris_have_same_number_or_elements(ris_list):
         return all([ris.num_tunable_elements == ris_list[0].num_tunable_elements and ris.total_elements == ris_list[0].total_elements for ris in ris_list])
@@ -39,9 +39,10 @@ def find_RIS_configuration_that_maximizes_SNR(ris_list: List[RIS], channel: Chan
     best_configuration = None
 
 
+    possible_configurations = iterate_combined_state(ris_list)
+    if show_progress_bar: possible_configurations = tqdm(possible_configurations, total=int(2**(len(ris_list)*num_dependent_elements)))
 
-
-    for configuration in iterate_combined_state(ris_list):
+    for configuration in possible_configurations:
 
         phase = phase_space.calculate_phase_shifts(configuration)
         phase = np.repeat(phase, repeats=num_dependent_elements)
