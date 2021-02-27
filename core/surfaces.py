@@ -169,16 +169,18 @@ class RIS:
         if not hasattr(position, '__len__') or len(position) != 3:
             raise ValueError("Expected a 3D position vector")
 
-        self.shape                = element_grid_shape                                              # (rows,cols) for the grid of elements
-        self.group_shape          = element_group_size if element_grid_shape else (1,1)             # (rows,cols) for each subgroup of the grid of elements
-        self.element_dimensions   = element_dimensions                                              # (width,height) for each element
-        self.position             = position                                                        # 3D position of the RIS (equals to the position of element (0,0) )
-        self.id                   = id_ if id_ is not None else id(self)                            # Useful for printing/plotting
-        self.total_elements       = np.prod(element_grid_shape)                                     # Number of elements within the grid (some may be dependent - i.e. always have the same state)
-        self.num_tunable_elements = self.total_elements // np.prod(element_group_size)              # Number of elements whose state can be set individually. This is the number of groups in the grid.
-        self.phase_space          = PhaseSpaceFactory(phase_space[0], **phase_space[1])             # Used to map internal states to phase shifts
-        self.state_space          = StateSpaceFactory(phase_space[0], dimension=self.num_tunable_elements, num_values=len(self.phase_space.values), **phase_space[1])  # Allowed values for internal state. Used only for checking when setting values and initializing to random state
-        self.element_coordinates  = self.construct_element_coordinates_array(self.position,         # A 2D matrix of shape (total_elements, 3) with the 3D position of each element (Z values are the same)
+        self.shape                  = element_grid_shape                                              # (rows,cols) for the grid of elements
+        self.group_shape            = element_group_size if element_grid_shape else (1,1)             # (rows,cols) for each subgroup of the grid of elements
+        self.element_dimensions     = element_dimensions                                              # (width,height) for each element
+        self.position               = position                                                        # 3D position of the RIS (equals to the position of element (0,0) )
+        self.id                     = id_ if id_ is not None else id(self)                            # Useful for printing/plotting
+        self.total_elements         = np.prod(element_grid_shape)                                     # Number of elements within the grid (some may be dependent - i.e. always have the same state)
+        self.num_dependent_elements = np.prod(element_group_size)                                     # Number of elements that are not tuned individually but take their phases from tunable ones.
+        self.num_tunable_elements   = self.total_elements // self.num_dependent_elements              # Number of elements whose state can be set individually. This is the number of groups in the grid.
+
+        self.phase_space            = PhaseSpaceFactory(phase_space[0], **phase_space[1])             # Used to map internal states to phase shifts
+        self.state_space            = StateSpaceFactory(phase_space[0], dimension=self.num_tunable_elements, num_values=len(self.phase_space.values), **phase_space[1])  # Allowed values for internal state. Used only for checking when setting values and initializing to random state
+        self.element_coordinates    = self.construct_element_coordinates_array(self.position,         # A 2D matrix of shape (total_elements, 3) with the 3D position of each element (Z values are the same)
                                                                              element_grid_shape,
                                                                              element_dimensions,
                                                                              element_group_size,

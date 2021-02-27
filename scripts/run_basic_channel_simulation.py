@@ -25,7 +25,7 @@ if __name__ == '__main__':
         'num_RIS'                : 4,
         'RIS_coordinates'        : [[dh-5,25,2], [dh-5,-35 ,2], [x1,y1,2], [x2,y2,2]],
         'RIS_elements'           : (8,8),
-        'RIS_element_groups'     : (4,1),
+        'RIS_element_groups'     : (4,4),
         'RIS_phase_values'       : [np.exp(1j*0), np.exp(1j*1)],
         'TX_locations'           : [0,30,2],
         'TX_RIS_link_mult_factor': Power,
@@ -51,23 +51,39 @@ if __name__ == '__main__':
 
     occurancies = dict()
 
+
+
+    from datetime import datetime
+
+
+    start_t = datetime.now()
+
     N = 10
     for _ in range(1):
 
-        best_configuration, best_snr = find_RIS_configuration_that_maximizes_SNR(RIS_list, ch, show_progress_bar=False)
+        best_configuration, best_snr = find_RIS_configuration_that_maximizes_SNR(RIS_list, ch, show_progress_bar=True)
 
         if best_configuration in occurancies.keys():
             occurancies[best_configuration] += 1
         else:
             occurancies[best_configuration] = 0
 
-    for key,value in occurancies.items():
-        print("{} : {:.1f}%".format(key, 100*value/float(N)))
 
 
-    chi_2, p_value = stats.chisquare(np.array(list(occurancies.values()))/float(N), [1/64.0]*len(occurancies.values()))
-    print("χ^2: ", chi_2)
-    print("p value: ", p_value)
+    end_t = datetime.now()
+    duration = end_t-start_t
+    print("Run simulation with {} RIS, {} phases, {} elements grouped in {}.  Time elapsed: {}".format(
+        setup.num_RIS, len(setup.RIS_phase_values), setup.RIS_elements, setup.RIS_element_groups, duration))
+
+    # for key,value in occurancies.items():
+    #     print("{} : {:.1f}%".format(key, 100*value/float(N)))
+    #
+    #
+    #
+    #
+    # chi_2, p_value = stats.chisquare(np.array(list(occurancies.values()))/float(N), [1/64.0]*len(occurancies.values()))
+    # print("χ^2: ", chi_2)
+    # print("p value: ", p_value)
 
 
 

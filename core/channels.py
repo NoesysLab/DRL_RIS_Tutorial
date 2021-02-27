@@ -122,34 +122,6 @@ class Channel:
     def get_combined_ris_phase(ris_list: List[RIS]):
         return np.concatenate([ris.get_phase('1D') for ris in ris_list])
 
-    # @property
-    # def H(self)->Matrix2D: # shape: (K,1)
-    #     H = self.TX_RIS_link.get_transmission_matrix()
-    #     return H
-    # @property
-    # def G(self)->Matrix2D: # shape (1,K)
-    #     G =  self.RX_RIS_link.get_transmission_matrix()
-    #     return G
-    #
-    # @property
-    # def h(self)->Vector:  # shape: (1,1)
-    #     h = self.TX_RX_link.get_transmission_matrix()
-    #     return h
-    #
-    # @property
-    # def Phi(self)->Matrix2D: # shape: (K,K)
-    #     Phi = np.diag(self.ris_phases)
-    #     return Phi
-    #
-    #
-    # def set_RIS_phases(self, ris_list: List[RIS]):
-    #     def are_all_phases_of_equal_length(ris_phases: List[Vector]):
-    #         return all(len(i) == len(ris_phases[0]) for i in ris_phases)
-    #
-    #     ris_phases_1D = [ris.get_phase('1D') for ris in ris_list]
-    #     assert are_all_phases_of_equal_length(ris_phases_1D), 'Currently only supporting RISs with phases of equal length.'
-    #
-    #     self.ris_phases = np.concatenate(ris_phases_1D)
 
 
     def _calculate_SNR(self, H, Phi, G, h):
