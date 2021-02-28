@@ -74,3 +74,10 @@ def condense_array(a: np.ndarray, group_size: Tuple[int, int]):
     return np.transpose(a[i_list, j_list])
 
 
+
+
+def diag_per_row(M):
+    b = np.zeros((M.shape[0], M.shape[1], M.shape[1]))
+    diag = np.arange(M.shape[1])
+    b[:, diag, diag] = M
+    return b

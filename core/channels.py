@@ -41,14 +41,14 @@ class Link:
         self.receiver_coordinates = None
         self.num_senders          = None
         self.num_receivers        = None
+        self.num_transmissions    = 1
 
-
-    def initialize(self, sender_coordinates: Matrix2D, receiver_coordinates: Matrix2D):
+    def initialize(self, sender_coordinates: Matrix2D, receiver_coordinates: Matrix2D, num_transmissions=1):
         self.sender_coordinates   = np.array(sender_coordinates)
         self.receiver_coordinates = np.array(receiver_coordinates)
         self.num_senders          = self.sender_coordinates.shape[0]
         self.num_receivers        = self.receiver_coordinates.shape[0]
-
+        self.num_transmissions    = num_transmissions
 
     def get_transmission_matrix(self)->Matrix2D:
         raise NotImplemented
@@ -70,10 +70,10 @@ class RayleighFadeLink(Link):
         self.path_losses         = None
         self.transmission_matrix = None
 
-    def initialize(self, sender_coordinates: Matrix2D, receiver_coordinates: Matrix2D,):
-        super().initialize(sender_coordinates, receiver_coordinates)
+    def initialize(self, sender_coordinates: Matrix2D, receiver_coordinates: Matrix2D, num_transmissions=1):
+        super().initialize(sender_coordinates, receiver_coordinates, num_transmissions)
 
-        self.fades               = sample_gaussian_complex_matrix((self.num_senders, self.num_receivers)) / np.sqrt(2)
+        self.fades               = sample_gaussian_complex_matrix((num_transmissions, self.num_senders, self.num_receivers)) / np.sqrt(2)
         self.path_losses         = np.empty_like(self.fades)
         self.transmission_matrix = np.empty_like(self.fades)
 
