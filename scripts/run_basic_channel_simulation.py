@@ -1,17 +1,19 @@
 import numpy as np
 from scipy import stats
+from tqdm import tqdm
 
 from core.setup import Setup, initialize_simulation_from_setup
 from core.surfaces import RIS
 from core.channels import Channel, RayleighFadeLink
-from core.exhaustive_phase_search import find_RIS_configuration_that_maximizes_SNR
-import core.globals as globals
 from utils.plotting import plot_positions
 
-
+from datetime import datetime
 import matplotlib.pyplot as plt
 
 if __name__ == '__main__':
+
+    start_t = datetime.now()
+
 
 
 
@@ -46,27 +48,21 @@ if __name__ == '__main__':
     train_RX_locations, \
     test_RX_locations = initialize_simulation_from_setup(setup)
 
-    ch = Channel(setup.TX_locations, train_RX_locations[0,:], TX_RIS_link_info, RX_RIS_link_info, TX_RX_link_info, setup.noise_power)
+
+    for i in tqdm(range(train_RX_locations.shape[0])):
+
+        ch = Channel(setup.TX_locations, train_RX_locations[i,:], TX_RIS_link_info, RX_RIS_link_info, TX_RX_link_info, setup.noise_power)
+        best_configuation, best_snr, _, _, _, _, = ch.exhaustive_snr_search(RIS_list, batch_size=2 ** 11, show_progress_bar=False)
 
 
-    occurancies = dict()
 
 
 
-    from datetime import datetime
 
 
-    start_t = datetime.now()
 
-    N = 10
-    for _ in range(1):
 
-        best_configuration, best_snr = find_RIS_configuration_that_maximizes_SNR(RIS_list, ch, show_progress_bar=True)
 
-        if best_configuration in occurancies.keys():
-            occurancies[best_configuration] += 1
-        else:
-            occurancies[best_configuration] = 0
 
 
 
@@ -74,16 +70,6 @@ if __name__ == '__main__':
     duration = end_t-start_t
     print("Run simulation with {} RIS, {} phases, {} elements grouped in {}.  Time elapsed: {}".format(
         setup.num_RIS, len(setup.RIS_phase_values), setup.RIS_elements, setup.RIS_element_groups, duration))
-
-    # for key,value in occurancies.items():
-    #     print("{} : {:.1f}%".format(key, 100*value/float(N)))
-    #
-    #
-    #
-    #
-    # chi_2, p_value = stats.chisquare(np.array(list(occurancies.values()))/float(N), [1/64.0]*len(occurancies.values()))
-    # print("χ^2: ", chi_2)
-    # print("p value: ", p_value)
 
 
 

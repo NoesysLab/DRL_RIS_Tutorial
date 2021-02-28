@@ -1,6 +1,10 @@
+import itertools
+
 import numpy as np
 from copy import deepcopy
 from typing import *
+
+from tqdm import tqdm
 
 from core import globals
 from core.surfaces import RIS
@@ -127,7 +131,7 @@ class Channel:
     def _calculate_SNR(self, H, Phi, G, h):
         channel_reflected = G @ Phi @ H + h # The @ operator denotes matrix multiplication (Python >= 3.5 - PEP 465)
         snr = np.power(np.absolute(channel_reflected), 2) / self.noise_power
-        return float(snr)
+        return snr
 
 
 
@@ -151,6 +155,7 @@ class Channel:
         h   = self.TX_RX_link.get_transmission_matrix()  # shape: (1,1)
         Phi = np.diag(ris_phases)                        # shape: (K,K)
 
+
         snr      = self._calculate_SNR (H, Phi, G, h)
         angle_TX = np.angle(H)
         mag_TX   = np.abs(H)
@@ -160,7 +165,111 @@ class Channel:
         return snr, angle_TX, mag_TX, angle_RX, mag_RX
 
 
+    @staticmethod
+    def all_ris_have_same_number_or_elements(ris_list):
+        return all([ris.num_tunable_elements == ris_list[0].num_tunable_elements and ris.total_elements == ris_list[0].total_elements for ris in ris_list])
+
+    @staticmethod
+    def are_all_states_of_equal_values(ris_list):
+        return all([len(ris.phase_space.values)==len(ris_list[0].phase_space.values) for ris in ris_list])
 
 
 
 
+
+
+
+
+    def exhaustive_snr_search(self, ris_list: List[RIS], batch_size=2**11, show_progress_bar=False):
+
+        if not self.all_ris_have_same_number_or_elements(ris_list):
+            raise ValueError("Currently supporting RISs of equal number of elements (tunable and total).")
+
+        if not self.are_all_states_of_equal_values(ris_list):
+            raise ValueError("All RISs must have the same number of discrete states.")
+
+
+
+
+        total_tunable_elements        = sum([ris.num_tunable_elements for ris in ris_list])
+        dependent_elements_per_RIS    = ris_list[0].num_dependent_elements
+        discrete_states               = range(ris_list[0].state_space.num_values)
+        phase_space                   = ris_list[0].phase_space
+        combined_state_space_elements = int(len(discrete_states)) ** int(total_tunable_elements)
+
+        possible_configurations       = itertools.product(discrete_states, repeat=total_tunable_elements)
+
+        num_transmissions             = combined_state_space_elements
+        K                             = sum([ris.total_elements for ris in ris_list])
+
+        ris_element_coordinates       = self.get_combined_elements_coordinates(ris_list)
+
+        self.TX_RIS_link.initialize([self.tx_position], ris_element_coordinates)
+        self.RX_RIS_link.initialize(ris_element_coordinates, [self.rx_position])
+        self.TX_RX_link.initialize([self.tx_position], [self.rx_position])
+
+
+        num_batches_required = int(np.ceil(num_transmissions / batch_size))
+        last_batch_size      = batch_size if num_transmissions % batch_size == 0 else num_transmissions % batch_size
+
+        best_batch_results = []
+        best_batch_snrs    = np.empty(shape=(num_batches_required,))
+
+
+        batch_indices = range(num_batches_required)
+        if show_progress_bar: batch_indices = tqdm(batch_indices, leave=True)
+
+        for i in batch_indices:
+
+            batch_transmissions  = batch_size if i != num_batches_required-1 else last_batch_size
+            batch_configurations = [next(possible_configurations) for _ in range(batch_transmissions)]
+
+            batch_phases = []
+            for configuration in batch_configurations:
+                phase = phase_space.calculate_phase_shifts(configuration)
+                phase = np.repeat(phase, repeats=dependent_elements_per_RIS)
+                batch_phases.append(phase)
+
+            batch_phases = np.array(batch_phases)
+
+
+            try:
+                H   = np.empty(shape=(batch_transmissions, K, 1), dtype=np.complex)
+                G   = np.empty(shape=(batch_transmissions, 1, K), dtype=np.complex)
+                h   = np.empty(shape=(batch_transmissions, 1, 1), dtype=np.complex)
+                Phi = np.empty(shape=(batch_transmissions, K, K), dtype=np.complex)
+
+            except MemoryError as e:
+                required_memory = str(e).split("Unable to allocate ")[-1].split(" for an array")[0]
+                raise MemoryError("Each batch requires "+required_memory+" which exceeds system memory. Lower batch_size value and try again.")
+
+            for j in range(batch_transmissions):
+
+                #transmission_index = i*batch_size+j
+
+                H[j,:,:]   = self.TX_RIS_link.get_transmission_matrix()  # shape: (K,1)
+                G[j,:,:]   = self.RX_RIS_link.get_transmission_matrix()  # shape: (1,K)
+                h[j,:,:]   = self.TX_RX_link.get_transmission_matrix()   # shape: (1,1)
+                Phi[j,:,:] = np.diag(batch_phases[j,:])      # shape: (K,K)
+
+
+            all_snr = self._calculate_SNR(H, Phi, G, h).flatten() # type: np.ndarray
+
+            best_configuration_index = np.argmax(all_snr)
+            snr                      = all_snr[best_configuration_index]
+
+            best_configuration       = batch_configurations[best_configuration_index]
+            angle_TX                 = np.angle( H[best_configuration_index, :, :])
+            mag_TX                   = np.abs(   H[best_configuration_index, :, :])
+            angle_RX                 = np.angle( G[best_configuration_index, :, :])
+            mag_RX                   = np.abs(   G[best_configuration_index, :, :])
+
+
+            best_batch_results.append((best_configuration, snr, angle_TX, mag_TX, angle_RX, mag_RX, best_configuration_index))
+            best_batch_snrs[i] = snr
+
+
+        best_snr_index_from_batches = int(np.argmax(best_batch_snrs))
+        best_configuration, snr, angle_TX, mag_TX, angle_RX, mag_RX, best_configuration_index = best_batch_results[best_snr_index_from_batches]
+
+        return best_configuration, snr, angle_TX, mag_TX, angle_RX, mag_RX,
