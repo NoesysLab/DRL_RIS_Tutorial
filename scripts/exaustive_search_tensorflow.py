@@ -17,10 +17,12 @@ from core.surfaces import RIS
 
 
 
-is_tf_2 = int(tf.__version__.split(".")[0]) == 2
+tf.compat.v1.enable_eager_execution()
 
-if not is_tf_2:
-    tf.enable_eager_execution()
+
+
+
+
 
 
 def exhaustive_snr_search(ch: Channel, ris_list: List[RIS], batch_size=2 ** 11, show_progress_bar=False):
@@ -44,9 +46,7 @@ def exhaustive_snr_search(ch: Channel, ris_list: List[RIS], batch_size=2 ** 11, 
     ris_element_coordinates              = ch.get_combined_elements_coordinates(ris_list)
 
 
-    ch.TX_RIS_link.initialize( [ch.tx_position]       , ris_element_coordinates )
-    ch.RX_RIS_link.initialize( ris_element_coordinates, [ch.rx_position]        )
-    ch.TX_RX_link .initialize( [ch.tx_position]       , [ch.rx_position]        )
+
 
 
 
@@ -56,10 +56,14 @@ def exhaustive_snr_search(ch: Channel, ris_list: List[RIS], batch_size=2 ** 11, 
 
     for i in tqdm(batch_indices):
 
+        ch.TX_RIS_link.initialize( [ch.tx_position]       , ris_element_coordinates )
+        ch.RX_RIS_link.initialize( ris_element_coordinates, [ch.rx_position]        )
+        ch.TX_RX_link.initialize ( [ch.tx_position]       , [ch.rx_position]        )
+
         batch_transmissions       = batch_size if i != num_batches_required - 1 else last_batch_size
-        batch_configurations      = next(possible_configurations)
+        batch_configurations      = tf.constant(next(possible_configurations))
         batch_phases              = phase_space.calculate_phase_shifts(batch_configurations)
-        batch_phases              = np.repeat(batch_phases, repeats=dependent_elements_per_RIS, axis=1)
+        batch_phases              = tf.constant(np.repeat(batch_phases, repeats=dependent_elements_per_RIS, axis=1))
 
 
 
@@ -77,10 +81,19 @@ def exhaustive_snr_search(ch: Channel, ris_list: List[RIS], batch_size=2 ** 11, 
             Phi[j, :, :]          = np.diag(batch_phases[j, :])               # shape: (K,K)
 
 
+        H = tf.constant(H, dtype=tf.float32)
+        G = tf.constant(G, dtype=tf.float32)
+        Phi = tf.constant(Phi, dtype=tf.float32)
+        h = tf.constant(h, dtype=tf.float32)
 
-        all_snr                   = ch._calculate_SNR(H, Phi, G, h).flatten()
+        H_sum = tf.reduce_sum(H)
 
-        best_configuration_index  = np.argmax(all_snr)
+        all_snr                   = tf.math.square(tf.math.abs(G @ Phi @ H + h)) /tf.constant(ch.noise_power, dtype=tf.float32)
+        all_snr                   = tf.reshape(all_snr, [-1])
+
+        all_snr_max = tf.reduce_sum(all_snr)
+
+        best_configuration_index  = int(tf.math.argmax(all_snr))
         snr                       = all_snr[best_configuration_index]
 
         best_configuration        = batch_configurations[best_configuration_index]

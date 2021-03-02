@@ -53,7 +53,9 @@ if __name__ == '__main__':
     for i in [1]:#tqdm(range(train_RX_locations.shape[0])):
 
         ch = Channel(setup.TX_locations, train_RX_locations[i,:], TX_RIS_link_info, RX_RIS_link_info, TX_RX_link_info, setup.noise_power)
-        best_configuation, best_snr, _, _, _, _, =  exhaustive_snr_search(ch, RIS_list, batch_size=2 ** 11, show_progress_bar=False) #ch.exhaustive_snr_search(RIS_list, batch_size=2 ** 11, show_progress_bar=False)
+
+        #best_configuration, best_snr, _, _, _, _, = ch.exhaustive_snr_search(RIS_list, batch_size=2 ** 11, show_progress_bar=False)
+        best_configuration, best_snr, _, _, _, _, = exhaustive_snr_search(ch, RIS_list, batch_size=2 ** 11, show_progress_bar=False)
 
 
 

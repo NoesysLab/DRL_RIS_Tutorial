@@ -207,9 +207,7 @@ class Channel:
 
         ris_element_coordinates       = self.get_combined_elements_coordinates(ris_list)
 
-        self.TX_RIS_link.initialize([self.tx_position], ris_element_coordinates)
-        self.RX_RIS_link.initialize(ris_element_coordinates, [self.rx_position])
-        self.TX_RX_link.initialize([self.tx_position], [self.rx_position])
+
 
 
         num_batches_required = int(np.ceil(num_transmissions / batch_size))
@@ -242,6 +240,10 @@ class Channel:
             #     batch_phases.append(phase)
             #
             # batch_phases = np.array(batch_phases)
+
+            self.TX_RIS_link.initialize([self.tx_position], ris_element_coordinates)
+            self.RX_RIS_link.initialize(ris_element_coordinates, [self.rx_position])
+            self.TX_RX_link.initialize([self.tx_position], [self.rx_position])
 
 
             try:
