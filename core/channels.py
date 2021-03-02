@@ -8,6 +8,7 @@ from tqdm import tqdm
 
 from core import globals
 from core.surfaces import RIS
+from utils.binary_space import BinaryEnumerator
 from utils.misc import Vector, Matrix2D, convert2array, Vector3D
 from utils.complex import sample_gaussian_complex_matrix
 
@@ -16,7 +17,7 @@ def calc_pathloss(tx_location,
                   rx_location,
                   isLOS,):
 
-    myDist = np.sqrt(np.sum(np.power(tx_location-rx_location, 2)))
+    myDist = np.sqrt(np.sum(np.power(tx_location-rx_location, 2), axis=1)).reshape((tx_location.shape[0], rx_location.shape[0]))
     if isLOS:
         pathlossDB = globals.pathlossCoefficientLOS \
                      + 10 * globals.pathlossExponentLOS \
@@ -43,12 +44,11 @@ class Link:
         self.num_receivers        = None
         self.num_transmissions    = 1
 
-    def initialize(self, sender_coordinates: Matrix2D, receiver_coordinates: Matrix2D, num_transmissions=1):
+    def initialize(self, sender_coordinates: Matrix2D, receiver_coordinates: Matrix2D):
         self.sender_coordinates   = np.array(sender_coordinates)
         self.receiver_coordinates = np.array(receiver_coordinates)
         self.num_senders          = self.sender_coordinates.shape[0]
         self.num_receivers        = self.receiver_coordinates.shape[0]
-        self.num_transmissions    = num_transmissions
 
     def get_transmission_matrix(self)->Matrix2D:
         raise NotImplemented
@@ -70,18 +70,19 @@ class RayleighFadeLink(Link):
         self.path_losses         = None
         self.transmission_matrix = None
 
-    def initialize(self, sender_coordinates: Matrix2D, receiver_coordinates: Matrix2D, num_transmissions=1):
-        super().initialize(sender_coordinates, receiver_coordinates, num_transmissions)
+    def initialize(self, sender_coordinates: Matrix2D, receiver_coordinates: Matrix2D):
+        super().initialize(sender_coordinates, receiver_coordinates)
 
-        self.fades               = sample_gaussian_complex_matrix((num_transmissions, self.num_senders, self.num_receivers)) / np.sqrt(2)
+        self.fades               = sample_gaussian_complex_matrix((self.num_senders, self.num_receivers)) / np.sqrt(2)
         self.path_losses         = np.empty_like(self.fades)
         self.transmission_matrix = np.empty_like(self.fades)
 
-        for i in range(self.num_senders):
-            for j in range(self.num_receivers):
-                self.path_losses[i,j] = calc_pathloss(self.sender_coordinates[i,:],
-                                                      self.receiver_coordinates[j,:],
-                                                      self.isLOS)
+        # for i in range(self.num_senders):
+        #     for j in range(self.num_receivers):
+        #         self.path_losses[i,j] = calc_pathloss(self.sender_coordinates[i,:],
+        #                                               self.receiver_coordinates[j,:],
+        #                                               self.isLOS)
+        self.path_losses = calc_pathloss(self.sender_coordinates, self.receiver_coordinates, self.isLOS)
         self.transmission_matrix = self.mult_factor * self.fades / np.sqrt(self.path_losses)
 
 
@@ -128,8 +129,10 @@ class Channel:
 
 
 
-    def _calculate_SNR(self, H, Phi, G, h):
-        channel_reflected = G @ Phi @ H + h # The @ operator denotes matrix multiplication (Python >= 3.5 - PEP 465)
+    def _calculate_SNR(self, H, Phi, G, h=None):
+        channel_reflected = G @ Phi @ H # The @ operator denotes matrix multiplication (Python >= 3.5 - PEP 465)
+        if h is not None:
+            channel_reflected += h
         snr = np.power(np.absolute(channel_reflected), 2) / self.noise_power
         return snr
 
@@ -197,7 +200,7 @@ class Channel:
         phase_space                   = ris_list[0].phase_space
         combined_state_space_elements = int(len(discrete_states)) ** int(total_tunable_elements)
 
-        possible_configurations       = itertools.product(discrete_states, repeat=total_tunable_elements)
+
 
         num_transmissions             = combined_state_space_elements
         K                             = sum([ris.total_elements for ris in ris_list])
@@ -212,6 +215,9 @@ class Channel:
         num_batches_required = int(np.ceil(num_transmissions / batch_size))
         last_batch_size      = batch_size if num_transmissions % batch_size == 0 else num_transmissions % batch_size
 
+        #possible_configurations = itertools.product(discrete_states, repeat=total_tunable_elements)
+        possible_configurations = BinaryEnumerator(batch_size, total_tunable_elements)
+
         best_batch_results = []
         best_batch_snrs    = np.empty(shape=(num_batches_required,))
 
@@ -219,18 +225,23 @@ class Channel:
         batch_indices = range(num_batches_required)
         if show_progress_bar: batch_indices = tqdm(batch_indices, leave=True)
 
-        for i in batch_indices:
+        for i in tqdm(batch_indices):
 
             batch_transmissions  = batch_size if i != num_batches_required-1 else last_batch_size
-            batch_configurations = [next(possible_configurations) for _ in range(batch_transmissions)]
 
-            batch_phases = []
-            for configuration in batch_configurations:
-                phase = phase_space.calculate_phase_shifts(configuration)
-                phase = np.repeat(phase, repeats=dependent_elements_per_RIS)
-                batch_phases.append(phase)
+            #batch_configurations = [next(possible_configurations) for _ in range(batch_transmissions)]
+            batch_configurations = next(possible_configurations)
 
-            batch_phases = np.array(batch_phases)
+            batch_phases = phase_space.calculate_phase_shifts(batch_configurations)
+            batch_phases = np.repeat(batch_phases, repeats=dependent_elements_per_RIS, axis=1)
+
+            # batch_phases = []
+            # for configuration in batch_configurations:
+            #     phase = phase_space.calculate_phase_shifts(configuration)
+            #     phase = np.repeat(phase, repeats=dependent_elements_per_RIS)
+            #     batch_phases.append(phase)
+            #
+            # batch_phases = np.array(batch_phases)
 
 
             try:
@@ -254,6 +265,7 @@ class Channel:
 
 
             all_snr = self._calculate_SNR(H, Phi, G, h).flatten() # type: np.ndarray
+            #all_snr = self._calculate_SNR(H, Phi, G).flatten()  # type: np.ndarray
 
             best_configuration_index = np.argmax(all_snr)
             snr                      = all_snr[best_configuration_index]
