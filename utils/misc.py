@@ -81,3 +81,18 @@ def diag_per_row(M):
     diag = np.arange(M.shape[1])
     b[:, diag, diag] = M
     return b
+
+
+
+def generate_binary_matrix(digits, start_from=None, end=None):
+    B_initial = np.array([[0],[1]], dtype=np.byte)
+    def next_column(B):
+        k = B.shape[1]
+        return np.block([[np.zeros((2**k,1), dtype=np.byte), B],[np.ones((2**k,1), dtype=np.byte),B]])
+    B = B_initial
+    for k in range(digits-1):
+        B = next_column(B)
+
+
+
+    return B
