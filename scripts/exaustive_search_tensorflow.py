@@ -20,6 +20,36 @@ from core.surfaces import RIS
 tf.compat.v1.enable_eager_execution()
 
 
+# @tf.function
+# def calc_pathloss(tx_location,
+#                   rx_location,
+#                   isLOS, setup):
+#
+#     pathlossCoefficientLOS   = setup.pathlossCoefficientLOS
+#     pathlossExponentLOS      = setup.pathlossExponentLOS
+#
+#     pathlossCoefficientNLOS  = setup.pathlossCoefficientNLOS
+#     pathlossExponentNLOS     = setup.pathlossExponentNLOS
+#
+#
+#     referenceDistance        = setup.referenceDistance
+#
+#
+#
+#     distances = tf.math.reduce_euclidean_norm(tx_location-rx_location, axis=1)
+#
+#     if isLOS:
+#         pathlossDB = pathlossCoefficientLOS \
+#                      + 10 * pathlossExponentLOS \
+#                      * tf.math.log10(distances / referenceDistance)
+#     else:
+#         pathlossDB = pathlossCoefficientNLOS \
+#                      + 10 * pathlossExponentNLOS \
+#                      * np.log10(distances / referenceDistance)
+#
+#     myPthLoss = np.power(10, (pathlossDB/10))
+#     return myPthLoss
+
 
 
 
