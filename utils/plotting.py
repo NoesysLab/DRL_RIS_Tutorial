@@ -152,7 +152,7 @@ def plot_positions(RIS_positions, TX_positions, RX_positions, ax=None, params: D
 
 
 
-def plot_setup_3D(ris_list: List[RIS], TX_positions, RX_positions, ax=None, params=None):
+def plot_setup_3D(ris_list: List[RIS], TX_positions, RX_positions, ax=None, params=None, scatterers_positions=None):
     if params is None: params = grid_plot_params
 
     if ax is None:
@@ -199,6 +199,10 @@ def plot_setup_3D(ris_list: List[RIS], TX_positions, RX_positions, ax=None, para
 
     ax.add_artist(legend1)
 
+
+
+    if scatterers_positions is not None:
+        mscatter(scatterers_positions[:, 0], scatterers_positions[:, 1], scatterers_positions[:, 2], m='x')
 
 
 

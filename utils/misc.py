@@ -77,7 +77,7 @@ def condense_array(a: np.ndarray, group_size: Tuple[int, int]):
 
 
 def diag_per_row(M):
-    b = np.zeros((M.shape[0], M.shape[1], M.shape[1]))
+    b = np.zeros((M.shape[0], M.shape[1], M.shape[1]), dtype=M.dtype)
     diag = np.arange(M.shape[1])
     b[:, diag, diag] = M
     return b
@@ -96,3 +96,32 @@ def generate_binary_matrix(digits, start_from=None, end=None):
 
 
     return B
+
+
+
+def cart2sph(x,y,z):
+    XsqPlusYsq = x**2 + y**2
+    r = np.sqrt(XsqPlusYsq + z**2)               # r
+    elev = np.arctan2(z,np.sqrt(XsqPlusYsq))     # theta
+    az = np.arctan2(y,x)                           # phi
+    return r, elev, az
+
+
+def ray_to_elevation_azimuth(starting_point: Union[Vector3D, Matrix3DCoordinates],
+                             ending_point: Union[Vector3D, Matrix3DCoordinates]) -> Union[Tuple[float,float], Tuple[Vector, Vector]]:
+
+    v = ending_point - starting_point # type: np.ndarray
+    if starting_point.ndim == 1:
+        v = v.reshape((1,3))
+
+    _, elev, az = cart2sph(v[:,0], v[:,1], v[:,2])
+
+    if starting_point.ndim == 1:
+        return float(elev), float(az)
+    else:
+        return elev, az
+
+
+
+def safe_log10(A: np.ndarray)->np.ndarray:
+    return np.log10(A, out=np.zeros_like(A), where=(A!=0))

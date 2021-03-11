@@ -159,7 +159,7 @@ def get_2D_positions_on_square_grid(num_positions: int, xy_center: Tuple[float,f
 
     X, Y                = np.meshgrid(xs, ys)
 
-    positions_grid      = np.empty(shape=(num_positions, 3 if z_value is not None else 2))
+    positions_grid      = np.empty(shape=(num_x_positions*num_y_positions, 3 if z_value is not None else 2))
     positions_grid[:,0] = X.flatten()
     positions_grid[:,1] = Y.flatten()
 

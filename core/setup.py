@@ -186,11 +186,11 @@ def initialize_simulation_from_setup(setup: Setup):
                vi)  Positions for the RX for testing phase
     """
 
-    center_TX_position = np.array([setup.train_RX_square_center[0], setup.train_RX_square_center[1], setup.train_RX_height])
+    center_RX_position = np.array([setup.train_RX_square_center[0], setup.train_RX_square_center[1], setup.train_RX_height])
     RIS_list = []
     for i in range(setup.num_RIS):
         ris = RIS(position              = setup.RIS_coordinates[i, :],
-                  facing_direction      = setup.TX_locations[0] - center_TX_position,
+                  facing_direction      = setup.TX_locations - center_RX_position,
                   element_grid_shape    = setup.RIS_elements,
                   element_group_size    = setup.RIS_element_groups,
                   element_dimensions    = setup.element_dimensions,
@@ -224,7 +224,7 @@ def initialize_simulation_from_setup(setup: Setup):
     else:
         test_RX_locations = None
 
-    return RIS_list, TX_RIS_link_info, RX_RIS_link_info, TX_RX_link_info, train_RX_locations, test_RX_locations, center_TX_position
+    return RIS_list, TX_RIS_link_info, RX_RIS_link_info, TX_RX_link_info, train_RX_locations, test_RX_locations, center_RX_position
 
 
 

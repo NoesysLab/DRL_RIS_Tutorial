@@ -178,7 +178,7 @@ class RIS:
         self.element_dimensions     = element_dimensions                                              # (width,height) for each element
         self.position               = position                                                        # 3D position of the RIS (equals to the position of element (0,0) )
         self.id                     = id_ if id_ is not None else id(self)                            # Useful for printing/plotting
-        self.total_elements         = np.prod(element_grid_shape)                                     # Number of elements within the grid (some may be dependent - i.e. always have the same state)
+        self.total_elements         = int(np.prod(element_grid_shape))                                     # Number of elements within the grid (some may be dependent - i.e. always have the same state)
         self.num_dependent_elements = np.prod(element_group_size)                                     # Number of elements that are not tuned individually but take their phases from tunable ones.
         self.num_tunable_elements   = self.total_elements // self.num_dependent_elements              # Number of elements whose state can be set individually. This is the number of groups in the grid.
 
@@ -191,6 +191,8 @@ class RIS:
                                                                              element_group_size,
                                                                              in_group_spacing,
                                                                              between_group_spacing)
+        self.element_spacing = in_group_spacing[0]
+
         # The internal state of the RIS, kept as a 1D array.
         # **IMPORTANT: This variable only keeps the state values for the tunable elements.
         # This convention should be kept when setting new values and when reading its value.**
