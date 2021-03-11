@@ -5,9 +5,7 @@ from itertools import product
 import warnings
 
 from utils.complex import sample_gaussian_complex_matrix
-from utils.custom_types import Vector, Matrix2D, Matrix3D, ComplexVector, ComplexArray
-
-
+from utils.custom_types import Vector, Matrix2D, Matrix3D, ComplexVector, ComplexArray, Vector3D, Matrix3DCoordinates
 
 wavelength = 1111111.0         # todo: change here
 lightspeed = 299702547         # on air
@@ -71,14 +69,14 @@ def calculate_pathloss(total_distance: Union[float, np.ndarray], isLOS: bool)->U
 
 
 
-def calculate_element_radiation(theta: np.ndarray)->np.ndarray:
+def calculate_element_radiation(theta: float)->float:
     """
     Calculate the RIS element radiation for an incoming signal using the cos^q pattern.
     Equation (4) from [Basar 2020]
-    :param theta: Elevation angles between the ray and every element of the RIS broadside
-    :return: Element radiations, G_e(theta) - array of the same shape as theta.
+    :param theta: Elevation angle between the ray and the RIS broadside
+    :return: RIS radiation, G_e(theta).
     """
-    assert np.all(theta > - pi/2) and np.all(theta < pi/2)
+    assert -pi/2 < theta < pi/2
     return 2 * (2*q+1) * power(cos(theta), 2*q)
 
 
@@ -91,8 +89,8 @@ def calculate_element_radiation(theta: np.ndarray)->np.ndarray:
 
 def calculate_array_response(
                              N              : int,
-                             phi            : np.ndarray,
-                             theta          : np.ndarray,
+                             phi            : Union[np.ndarray, float],
+                             theta          : Union[np.ndarray, float],
                              element_spacing: float)->ComplexArray:
     """
 
@@ -101,22 +99,30 @@ def calculate_array_response(
     An RIS with uniformly distributed elements is assummed which is positioned either on the xz or the yz planes.
 
     :param N: The number of RIS elements. Must be a perfect square.
-    :param phi: The azimuth angles of arrival between
-    :param theta:
-    :param element_spacing:
-    :return:
+    :param phi: The azimuth angle(s) of arrival between the TX or cluster and the RIS broadside
+    :param theta: The elevation angle(s) of arrival between the TX or cluster and the RIS broadside
+    :param element_spacing: Used to position elements in a grid
+    :return: The array responses for each element. If phi and theta are floats, then it is a 1D array of length N. Otherwise, if phi and theta are numpy arrays, the resulted array has a shape like them but expanded by one axis of size N.
     """
 
     assert ceil(sqrt(N)) == floor(sqrt(N)), 'N (number of RIS elements) must be a perfect square'
     assert element_spacing > 0            , 'Spacing between elements must be a positive number'
-    assert len(phi) == len(theta)         , 'arrays of azimuth and elevation angles must be of equal sizes'
+    if isinstance(phi, np.ndarray):
+        assert phi.shape == theta.shape     , 'arrays of azimuth and elevation angles must be of equal sizes'
 
     d                   = element_spacing
     element_coordinates = np.array(list(product(range(int(sqrt(N))), repeat=2)))
     x                   = element_coordinates[:,0]
     y                   = element_coordinates[:,1]
-    response            = np.exp(1j * k * d * (x * sin(theta) + y * sin(phi) * cos(theta) ) )
 
+    if isinstance(phi, np.ndarray):
+        extended_shape = phi.shape + tuple([len(x)])
+        x     = np.broadcast_to(x, extended_shape)
+        y     = np.broadcast_to(y, extended_shape)
+        theta = theta[..., np.newaxis]
+        phi   = phi[..., np.newaxis]
+
+    response = np.exp(1j * k * d * (x * sin(theta) + y * sin(phi) * cos(theta) ) )
     return response
 
 
@@ -140,13 +146,14 @@ def LOS_link_exists(dist: float)->bool:
 
 
 def calculate_TX_RIS_channel(
+        N                     : int,
         Sc                    : List[int],
-        theta_scatterers      : Matrix3D,
-        phi_scatterers        : Matrix3D,
+        theta_scatterers      : Matrix2D,
+        phi_scatterers        : Matrix2D,
         length_path_scatterers: Matrix2D,
         dist_TX_RIS           : float,
-        theta_RIS_LOS         : Vector,
-        phi_RIS_LOS           : Vector,
+        theta_RIS_LOS         : float,
+        phi_RIS_LOS           : float,
         RIS_element_spacing   : float,
         LOS_component_exists  : bool,)->ComplexVector:
 
@@ -156,17 +163,17 @@ def calculate_TX_RIS_channel(
 
     This channel is modeled as a Ricean faded indoor channel at 5G frequencies.
     For notation, let C be the number of clusters, Sc be the number of scatterers/IOs/rays of the c-th cluster,
-    Smax be the maximum number of scatterers in any given cluster,
-    N be the number of RIS elements (which is assumed to be a perfect square).
+    Smax be the maximum number of scatterers in any given cluster.
     The following matrices should be appended with 0 where Sc is smaller than Smax.
 
+    :param N                       Number of RIS elements (which is assumed to be a perfect square).
     :param Sc                      A list of integers of length C, each denoting the number of scatterers in the corresponding cluster
-    :param theta_scatterers:       A matrix of shape (C, Smax, N) where the (c,s,n)-th element is the elevation angle of arrival between the s-th scatterer of the c-th cluster and the n-th RIS element.
-    :param phi_scatterers:         A matrix of shape (C, Smax, N) where the (c,s,n)-th element is the azimuth angle of arrival between the s-th scatterer of the c-th cluster and the n-th RIS element.
-    :param length_path_scatterers: A matrix of shape (C, Smax) where the (c,s)-th element is the length of the path from the TX to the RIS' broadside after being scattered by the s-th scatterer of the c-th cluster - i.e. d_{c,s} = a_c + b_{c,s}
-    :param dist_TX_RIS:            The Line of Sight distance between the TX and the RIS' broadside
-    :param theta_RIS_LOS:          A vector of length N where the n-th element is the elevation angle of arrival between the TX and the RIS
-    :param phi_RIS_LOS:            A vector of length N where the n-th element is the azimuth angle of arrival between the TX and the RIS
+    :param theta_scatterers:       A matrix of shape (C, Smax) where the (c,s)-th element is the elevation angle of arrival between the s-th scatterer of the c-th cluster and the RIS broadside.
+    :param phi_scatterers:         A matrix of shape (C, Smax) where the (c,s)-th element is the azimuth angle of arrival between the s-th scatterer of the c-th cluster and the RIS broadside.
+    :param length_path_scatterers: A matrix of shape (C, Smax) where the (c,s)-th element is the length of the path from the TX to the RIS broadside after being scattered by the s-th scatterer of the c-th cluster - i.e. d_{c,s} = a_c + b_{c,s}
+    :param dist_TX_RIS:            The Line of Sight distance between the TX and the RIS broadside
+    :param theta_RIS_LOS:          The elevation angle of arrival between the TX and the RIS
+    :param phi_RIS_LOS:            The azimuth angle of arrival between the TX and the RIS
     :param RIS_element_spacing:    The distance between consecutive RIS elements (assumed to be the same both vertically and horizontally)
     :param LOS_component_exists    Whether the channel must account for a LOS effect as well. This is passed as a parameter to allow coupling the random choice with the TX-RX channel.
     :return:                       The TX-RIS channel coefficients, h, - a complex vector of size N
@@ -175,47 +182,47 @@ def calculate_TX_RIS_channel(
 
     C      = len(Sc)
     Smax   = theta_scatterers.shape[1]
-    N      = theta_scatterers.shape[2]
 
-    assert max(Sc) == Smax
+    assert np.max(Sc) == Smax
     assert theta_scatterers.shape[0] == phi_scatterers.shape[0] == C
     assert theta_scatterers.shape[1] == phi_scatterers.shape[1]
-    assert theta_scatterers.shape[2] == phi_scatterers.shape[2]
-    assert len(theta_RIS_LOS) == len(phi_RIS_LOS) == N
 
 
     # Non-LOS component: Summed array response vectors and link attenuations for each sub-ray
 
     gamma  = sqrt(1/sum(Sc))                                                                     # normalization factor
     bettas = sample_gaussian_complex_matrix((C,Smax))                                            # Complex Array of shape (C,Smax)   - Complex Gaussian distributed path gain of the (c,s)-th scatterer
-    Ge     = calculate_element_radiation(theta_scatterers)                                       # Array of shape (C,Smax,N) - RIS element radiation from (4)
+    Ge     = calculate_element_radiation(theta_scatterers)                                       # Array of shape (C,Smax) - RIS element radiation from (4)
     L      = calculate_pathloss(length_path_scatterers, isLOS=False)                             # Array of shape (C,Smax)   - Attenuation along the (c,s)-th propagation path
-    L      = np.repeat(L[:, :, np.newaxis], repeats=N, axis=2)                                   # Convert L to a 3D matrix of shape (C,Smax,N) by repeating the same path loss for all RIS elements
     a      = calculate_array_response(N, phi_scatterers, theta_scatterers, RIS_element_spacing)  # Complex Array of shape (C,Smax,N) - Array response of the RIS
-    h_NLOS = gamma * sum(bettas * sqrt(Ge * L) * a, axis=[0,1])                                  # Compute the first term of (2) by adding scattered gains, attenuations and responses along all (C,Sc) scatterers.
+    part2D = bettas * sqrt(Ge * L)
+    h_NLOS = gamma * sum( part2D[...,np.newaxis] * a, axis=[0,1])                                # Compute the first term of (2) by adding scattered gains, attenuations and responses along all (C,Sc) scatterers.
 
 
     # LOS component: Same strategy but for the single TX-RIS path
 
     if LOS_component_exists:
-        Ge_LOS = calculate_element_radiation(theta_RIS_LOS)                                      # Array of shape (N) - RIS element radiation from (4)
+        Ge_LOS = calculate_element_radiation(theta_RIS_LOS)                                      # float - RIS element radiation from (4)
         L_LOS  = calculate_pathloss(dist_TX_RIS, isLOS=True)                                     # float - attenuation in the LOS link
         eta    = np.random.uniform(0, 2*pi, size=N)                                              # Array of shape (N) - Random phase term
         a_LOS  = calculate_array_response(N, phi_RIS_LOS, theta_RIS_LOS, RIS_element_spacing)    # Complex Array of shape (N) - Array response of the RIS
-        h_LOS  = sqrt(L_LOS * Ge_LOS) * exp(1j * eta) * a_LOS                                    # LOS component of the channel coefficients from (6).
+        h_LOS  = sqrt(Ge_LOS * L_LOS) * exp(1j * eta) * a_LOS                                    # LOS component of the channel coefficients from (6).
     else:
         h_LOS  = 0
 
     h = h_NLOS + h_LOS
+
+    assert len(h) == N
     return h
 
 
 
 
 def calculate_RIS_RX_channel(
-        dist_RIS_RX           : Matrix2D,
-        theta_RIS_RX          : Vector,
-        phi_RIS_RX            : Vector,
+        N                     : int,
+        dist_RIS_RX           : float,
+        theta_RIS_RX          : float,
+        phi_RIS_RX            : float,
         RIS_element_spacing   : float,)->ComplexVector:
 
     """
@@ -225,6 +232,7 @@ def calculate_RIS_RX_channel(
     That is, the assumption that the RX and the RIS are sufficiently close.
     This channel is modeled as a Rayleigh faded indoor channel at 5G frequencies.
 
+    :param N                     Number of RIS elements (which is assumed to be a perfect square).
     :param dist_RIS_RX:          The Line of Sight distance between the TX and the RIS' broadside
     :param theta_RIS_RX:         A vector of length N where the n-th element is the elevation angle of arrival between the RIS and the RX
     :param phi_RIS_RX:           A vector of length N where the n-th element is the azimuth angle of arrival between the RIS and the RX
@@ -233,13 +241,13 @@ def calculate_RIS_RX_channel(
     :return:                     The RIS-RX channel coefficients, g, - a complex vector of size N
     """
 
-    N      = theta_RIS_RX.shape[0]
-    Ge     = calculate_element_radiation(theta_RIS_RX)                                          # Array of shape (N) - RIS element radiation from (4)
+    Ge     = calculate_element_radiation(theta_RIS_RX)                                          # float - RIS element radiation from (4)
     L      = calculate_pathloss(dist_RIS_RX, isLOS=True)                                        # float - attenuation across the link path
     eta    = np.random.uniform(0, 2 * pi, size=N)                                               # Array of shape (N) - Random phase term
     a      = calculate_array_response(N, phi_RIS_RX, theta_RIS_RX, RIS_element_spacing)         # Array of shape (N) - Array response of the RIS
-    g      = sqrt(L * Ge) * exp(1j * eta) * a                                                   # LOS component of the channel coefficients from (6).
+    g      = sqrt(Ge * L) * exp(1j * eta) * a                                                   # LOS component of the channel coefficients from (6).
 
+    assert len(g) == L
     return g
 
 
@@ -269,7 +277,7 @@ def calculate_TX_RX_channel(
 
 
     C     = len(Sc)
-    Smax  = max(Sc)
+    Smax  = np.max(Sc)
 
     assert len(TX_scatterers_distances) == len(scatterers_RIS_distances) == len(scatterers_RX_distances) == C
 
@@ -297,5 +305,85 @@ def calculate_TX_RX_channel(
 
 
 
+
+
+
+def generate_clusters(TX_coordinates : Vector3D,
+                      RIS_Coordinates: Matrix3DCoordinates,
+                      lambda_p       : float):
+
+    # assuming TX is on the yz plane and all RIS on the xz plane
+    assert np.all(RIS_Coordinates[:,0]/RIS_Coordinates[:,1] == RIS_Coordinates[0,0]/RIS_Coordinates[0,1])
+
+    C             = np.maximum(1, np.random.poisson(lambda_p))
+    Sc            = np.random.randint(1, 30, size=C)
+    Smax          = np.max(Sc)
+
+    mean_phi_TX   = np.random.uniform(-pi/2, pi/2, size=C)
+    mean_theta_TX = np.random.uniform(-pi/4, pi/4, size=C)
+
+    phi_TX        = [np.random.laplace(mean_phi_TX[c]  , 5, size=Sc[c]) for c in range(C)]
+    theta_TX      = [np.random.laplace(mean_theta_TX[c], 5, size=Sc[c]) for c in range(C)]
+
+
+
+    y_bounds = [TX_coordinates[1]-np.max(RIS_Coordinates, axis=1), TX_coordinates[1] + np.min(RIS_Coordinates, axis=1)]
+    x_bounds = [TX_coordinates[0], np.max(RIS_Coordinates, axis=1)]
+    z_bounds = [0, TX_coordinates[2]]
+
+    num_RIS = RIS_Coordinates.shape[0]
+
+
+
+    cluster_positions = np.zeros((C,Smax, num_RIS, 3))
+
+    TX_clusters_distances  = np.zeros(C)
+    clusters_RIS_distances = np.zeros((C, Smax, num_RIS))
+    thetas_AoA             = np.zeros((C, Smax, num_RIS))
+    phis_AoA               = np.zeros((C, Smax, num_RIS))
+
+
+    for r in range(num_RIS):
+
+        dist_TX_RIS = np.linalg.norm(TX_coordinates - RIS_Coordinates[r, :])
+        x_RIS = RIS_Coordinates[0]
+        y_RIS = RIS_Coordinates[1]
+        z_RIS = RIS_Coordinates[2]
+
+
+        c = 0
+        while c < C:
+
+            a_c = np.random.uniform(1, dist_TX_RIS)
+
+
+            is_distance_valid = True
+
+            for s in range(Sc[c]):
+
+                x = x_RIS + a_c * cos(theta_TX[c][s]) * cos(phi_TX[c][s])
+                y = y_RIS - a_c * cos(theta_TX[c][s]) * sin(phi_TX[c][s])
+                z = z_RIS + a_c * sin(theta_TX[c][s])
+
+                if not x_bounds[0] <= x <= x_bounds[1] or not y_bounds[0] <= y <= z_bounds[1] or not z_bounds[0] <= z <= z_bounds[1]:
+                    is_distance_valid = False
+                    break
+
+                cluster_positions[c,s,r,:]    = [x,y,z]
+                b_c_s                         = np.linalg.norm(RIS_Coordinates[r, :] - cluster_positions[c,s,r,:])
+                clusters_RIS_distances[c,s,r] = b_c_s
+                thetas_AoA[c,s,r]             = np.sign(z - z_RIS) * np.arcsin( np.abs(z_RIS - z) / b_c_s )
+                phis_AoA[c,s,r]               = np.sign(x_RIS - x) * np.arctan( np.abs(x_RIS - x) / np.abs(y_RIS - y) )
+
+
+            TX_clusters_distances[c] = a_c
+
+
+
+            if is_distance_valid:
+                c += 1
+
+
+    return Sc, cluster_positions, TX_clusters_distances, clusters_RIS_distances, thetas_AoA, phis_AoA
 
 
