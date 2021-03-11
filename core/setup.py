@@ -172,7 +172,7 @@ class Setup:
 
 
 
-def initialize_simulation_from_setup(setup: Setup)->Tuple[List[RIS], Tuple[Channel, Dict], Tuple[Channel, Dict], Tuple[Channel, Dict], Matrix3DCoordinates, Matrix3DCoordinates]:
+def initialize_simulation_from_setup(setup: Setup):
     """
     Construct appropriate objects from a configurations to start the simulation.
     This function encapsulates all of the initialization code, apart from the channels which change with coordinates.
@@ -186,10 +186,11 @@ def initialize_simulation_from_setup(setup: Setup)->Tuple[List[RIS], Tuple[Chann
                vi)  Positions for the RX for testing phase
     """
 
-
+    center_TX_position = np.array([setup.train_RX_square_center[0], setup.train_RX_square_center[1], setup.train_RX_height])
     RIS_list = []
     for i in range(setup.num_RIS):
-        ris = RIS(position              = setup.RIS_coordinates[0, :],
+        ris = RIS(position              = setup.RIS_coordinates[i, :],
+                  facing_direction      = setup.TX_locations[0] - center_TX_position,
                   element_grid_shape    = setup.RIS_elements,
                   element_group_size    = setup.RIS_element_groups,
                   element_dimensions    = setup.element_dimensions,
@@ -223,7 +224,7 @@ def initialize_simulation_from_setup(setup: Setup)->Tuple[List[RIS], Tuple[Chann
     else:
         test_RX_locations = None
 
-    return RIS_list, TX_RIS_link_info, RX_RIS_link_info, TX_RX_link_info, train_RX_locations, test_RX_locations
+    return RIS_list, TX_RIS_link_info, RX_RIS_link_info, TX_RX_link_info, train_RX_locations, test_RX_locations, center_TX_position
 
 
 

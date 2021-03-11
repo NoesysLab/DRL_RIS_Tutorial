@@ -177,3 +177,19 @@ def get_receiver_positions(placement_type: str, num_positions: int, xy_center: T
         return get_random_2D_positions_on_square(num_positions, xy_center, width, z_value)
     else:
         raise ValueError("Only supporting 'grid' or 'random' placement types.")
+
+
+
+
+
+def rotate(xy, ang):
+    coords = np.array(xy).reshape((2,1))
+    R      = np.array([[np.cos(ang), -np.sin(ang)],
+                     [np.sin(ang),  np.cos(ang)]])
+
+    return (R @ coords).reshape(xy.shape)
+
+
+
+def rotate_along_coords(xy, xy_base, ang_rad):
+    return rotate(xy-xy_base, ang_rad)+xy_base

@@ -47,8 +47,21 @@ if __name__ == '__main__':
     RX_RIS_link_info, \
     TX_RX_link_info, \
     train_RX_locations, \
-    test_RX_locations = initialize_simulation_from_setup(setup)
+    test_RX_locations, \
+    center_TX_position = initialize_simulation_from_setup(setup)
 
+    from utils.plotting import plot_setup_3D, plot_positions, grid_plot_params
+
+
+
+    params = grid_plot_params.copy()
+    params['zlims'] = [0, 3]
+    params['color_by_height'] = False
+    plot_setup_3D(RIS_list, setup.TX_locations.reshape((1,3)), center_TX_position.reshape(1,3), params=params)
+
+    plot_positions(np.array([ris.position for ris in RIS_list]), setup.TX_locations.reshape((1, 3)), center_TX_position.reshape(1, 3),)
+
+    plt.show()
 
     for i in [1]:#tqdm(range(train_RX_locations.shape[0])):
 

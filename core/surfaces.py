@@ -2,6 +2,8 @@ import itertools
 
 import numpy as np
 from typing import *
+
+from core.geometry import rotate_along_coords
 from utils.misc import convert2array, expand_array, Vector3D, Vector2D, Matrix3DCoordinates
 import gym.spaces as spaces
 import functools
@@ -147,6 +149,7 @@ class RIS:
     """
     def __init__(self,
                  position             : Vector3D,
+                 facing_direction     : Vector3D,
                  element_grid_shape   : Tuple[int, int],
                  element_group_size   : Union[None, Tuple[int, int]],
                  element_dimensions   : Union[list, Vector2D, int],
@@ -171,6 +174,7 @@ class RIS:
 
         self.shape                  = element_grid_shape                                              # (rows,cols) for the grid of elements
         self.group_shape            = element_group_size if element_grid_shape else (1,1)             # (rows,cols) for each subgroup of the grid of elements
+        self.facing_vecor           = facing_direction
         self.element_dimensions     = element_dimensions                                              # (width,height) for each element
         self.position               = position                                                        # 3D position of the RIS (equals to the position of element (0,0) )
         self.id                     = id_ if id_ is not None else id(self)                            # Useful for printing/plotting
@@ -181,6 +185,7 @@ class RIS:
         self.phase_space            = PhaseSpaceFactory(phase_space[0], **phase_space[1])             # Used to map internal states to phase shifts
         self.state_space            = StateSpaceFactory(phase_space[0], dimension=self.num_tunable_elements, num_values=len(self.phase_space.values), **phase_space[1])  # Allowed values for internal state. Used only for checking when setting values and initializing to random state
         self.element_coordinates    = self.construct_element_coordinates_array(self.position,         # A 2D matrix of shape (total_elements, 3) with the 3D position of each element (Z values are the same)
+                                                                             self.facing_vecor,
                                                                              element_grid_shape,
                                                                              element_dimensions,
                                                                              element_group_size,
@@ -198,6 +203,7 @@ class RIS:
 
     @staticmethod
     def construct_element_coordinates_array(base_coordinates     : Vector3D,
+                                            facing_vector        : Vector3D,
                                             shape                : Tuple[int, int],
                                             element_dimensions   : Union[list, Vector2D, int],
                                             group_size           : Union[None, Tuple[int, int]],
@@ -218,12 +224,12 @@ class RIS:
             num_groups_before = num_elements_before // group_size
             num_in_group_spacings_needed = num_elements_before - num_groups_before
 
-            coordinates = base_coordinates[0:2] + \
+            coordinates = np.array([base_coordinates[0], base_coordinates[2]]) + \
                           num_elements_before * element_dimensions + \
                           num_groups_before * between_group_spacing + \
                           num_in_group_spacings_needed * in_group_spcaing
 
-            coordinates3D = np.hstack([coordinates, base_coordinates[2]])
+            coordinates3D = np.array([coordinates[0], base_coordinates[1], coordinates[1]])  #np.hstack([coordinates, base_coordinates[1]])
             return Vector3D(coordinates3D)
 
 
@@ -232,7 +238,43 @@ class RIS:
             for j in range(shape[1]):
                 coords_table.append(_calculate_element_coordinates(i, j))
 
-        return np.array(coords_table)
+        #coords_table = np.array(coords_table)
+
+        np.seterr(all='raise')
+        try:
+            ang = np.arctan(facing_vector[1]/facing_vector[0])
+        except FloatingPointError:
+            ang = np.pi/2
+
+
+        base_coords = coords_table[0][0:2]
+        rotated_coords = []
+        for elem_coords in coords_table:
+            xy = elem_coords[0:2]
+            z  = elem_coords[2]
+            xy_new = rotate_along_coords(xy, base_coords, ang)
+            rotated_coords.append(np.array([xy_new[0], xy_new[1], z]))
+
+        coords_table = np.array(rotated_coords)
+
+
+
+
+        # Rx  = np.array([[1, 0, 0],
+        #                 [0, np.cos(ang), -np.sin(ang)],
+        #                 [0, np.sin(ang), np.cos(ang)]])
+        #
+        # #ang = np.angle(facing_vector)[1]
+        # Ry  = np.array([[np.cos(ang),  0, np.sin(ang)],
+        #                 [    0,        1,      0     ],
+        #                 [-np.sin(ang), 0, np.cos(ang)]])
+
+        #x = coords_table[:,0]
+        #y = coords_table[:,1]
+        #coords_table[:, 0] = x + x * np.cos(ang) - y * np.sin(ang) + base_coordinates[0]
+        #coords_table[:, 1] = y + x * np.sin(ang) + y * np.cos(ang) + base_coordinates[1]
+
+        return coords_table
 
 
     def set_random_state(self):
