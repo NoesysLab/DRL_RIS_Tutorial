@@ -67,7 +67,7 @@ def calculate_pathloss(total_distance: Union[float, np.ndarray], isLOS: bool, wa
         pathloss = pathloss[0]
 
     if wallExists:
-        pathloss -= 10
+        pathloss -= 10 # todo: Make it + !!!!
 
     return pathloss
 

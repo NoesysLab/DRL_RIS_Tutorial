@@ -221,7 +221,7 @@ if __name__ == '__main__':
     params['color_by_height'] = False
     plot_setup_3D(RIS_list, setup.TX_locations.reshape((1,3)), center_RX_position.reshape(1,3), params=params, scatterers_positions=scatterers_positions)
     plot_positions(np.array([ris.position for ris in RIS_list]), setup.TX_locations.reshape((1, 3)), center_RX_position.reshape(1, 3),)
-    #plt.show()
+    plt.show()
 
 
     H = calculate_H(RIS_list, setup.TX_locations.reshape(-1), TX_clusters_distances, clusters_RIS_distances, thetas_AoA, phis_AoA)
@@ -234,6 +234,8 @@ if __name__ == '__main__':
         G, h0                 = calculate_G_and_h0(RIS_list, setup.TX_locations.reshape(1,3), train_RX_locations[i,:])
         result                = exhaustive_search(RIS_list, H, G, h0, setup.noise_power, batch_size=2*12, show_progress_bar=True)
 
+
+        break
 
 
 
