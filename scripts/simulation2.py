@@ -3,13 +3,14 @@ from tqdm import tqdm
 from datetime import datetime
 import matplotlib.pyplot as plt
 
-from typing import List
+from typing import List, Tuple
 
 from core.setup import Setup, initialize_simulation_from_setup
 from core.surfaces import RIS
 from core.channels2 import generate_clusters, RIS_RX_channel_model, TX_RIS_channel_model, \
     TX_RX_channel_model, calculate_RX_scatterers_distances
 from utils.binary_space import BinaryEnumerator
+from utils.data_handlers import SimulationDataset
 from utils.misc import ray_to_elevation_azimuth, diag_per_row
 
 
@@ -19,7 +20,7 @@ def exhaustive_search(ris_list: List[RIS],
                       h0,
                       noise_power,
                       batch_size=2**11,
-                      show_progress_bar=False):
+                      show_progress_bar=False)->Tuple[np.ndarray, float]:
 
     total_tunable_elements        = sum([ris.num_tunable_elements for ris in ris_list])
     dependent_elements_per_RIS    = ris_list[0].num_dependent_elements
@@ -31,7 +32,7 @@ def exhaustive_search(ris_list: List[RIS],
     num_batches_required          = int(np.ceil(num_transmissions / batch_size))
     last_batch_size               = batch_size if num_transmissions % batch_size == 0 else num_transmissions % batch_size
     possible_configurations       = BinaryEnumerator(batch_size, total_tunable_elements)
-    best_batch_results            = []
+    best_batch_results            = np.empty(shape=(num_batches_required,), dtype=object)
     best_batch_snrs               = np.empty(shape=(num_batches_required,))
     batch_indices                 = range(num_batches_required)
 
@@ -41,39 +42,29 @@ def exhaustive_search(ris_list: List[RIS],
 
     for i in batch_indices:
 
-        batch_transmissions      = batch_size if i != num_batches_required-1 else last_batch_size
-        batch_configurations     = next(possible_configurations)
+        batch_transmissions            = batch_size if i != num_batches_required-1 else last_batch_size
+        batch_configurations           = next(possible_configurations)
+        batch_phases                   = phase_space.calculate_phase_shifts(batch_configurations)
+        batch_phases                   = np.repeat(batch_phases, repeats=dependent_elements_per_RIS, axis=1)
+        Phi                            = diag_per_row(batch_phases)
 
-        batch_phases             = phase_space.calculate_phase_shifts(batch_configurations)
-        batch_phases             = np.repeat(batch_phases, repeats=dependent_elements_per_RIS, axis=1)
+        complete_channel_coefficients  = G @ Phi @ H + h0
+        batch_snrs                     = np.power(np.absolute(complete_channel_coefficients), 2) / noise_power
+        batch_snrs                     = batch_snrs.flatten()
 
-        Phi                      = diag_per_row(batch_phases)
-
-
-
-        channel_reflected        = G @ Phi @ H + h0
-        all_snr                  = np.power(np.absolute(channel_reflected), 2) / noise_power
-        all_snr                  = all_snr.flatten()
-
-        best_configuration_index = np.argmax(all_snr)
-        snr                      = all_snr[best_configuration_index]
-
-        best_configuration       = batch_configurations[best_configuration_index]
-        # angle_TX                 = np.angle( H[best_configuration_index, :, :])
-        # mag_TX                   = np.abs(   H[best_configuration_index, :, :])
-        # angle_RX                 = np.angle( G[best_configuration_index, :, :])
-        # mag_RX                   = np.abs(   G[best_configuration_index, :, :])
+        best_batch_configuration_index = np.argmax(batch_snrs)
+        best_batch_snr                 = batch_snrs[best_batch_configuration_index]
+        best_configuration             = batch_configurations[best_batch_configuration_index]
+        best_batch_results[i]          = best_configuration
+        best_batch_snrs[i]             = best_batch_snr
 
 
-        #best_batch_results.append((best_configuration, snr, angle_TX, mag_TX, angle_RX, mag_RX, best_configuration_index))
-        best_batch_snrs[i] = snr
+    best_snr_index_from_batches        = int(np.argmax(best_batch_snrs))
+    total_best_configuration           = best_batch_results[best_snr_index_from_batches]
+    total_best_snr                     = best_batch_snrs[best_snr_index_from_batches]
 
 
-    best_snr_index_from_batches = int(np.argmax(best_batch_snrs))
-    #best_configuration, snr, angle_TX, mag_TX, angle_RX, mag_RX, best_configuration_index = best_batch_results[best_snr_index_from_batches]
-
-    return 42
-    #return best_configuration, snr, #angle_TX, mag_TX, angle_RX, mag_RX,
+    return total_best_configuration, total_best_snr
 
 
 
@@ -173,11 +164,11 @@ if __name__ == '__main__':
 
 
     setup = Setup.from_config({'test': {
-        'num_RIS'                : 4,
-        'RIS_coordinates'        : [[15,25,2], [15, 35 ,2], [25, 25, 2], [25,35,2]],
-        'RIS_elements'           : (8,8),
+        'num_RIS'                : 2,#4,
+        'RIS_coordinates'        : [[15,25,2], [15, 35 ,2], ],#[25, 25, 2], [25,35,2]],
+        'RIS_elements'           : (2,2),
         'element_dimensions'     : (0.3,0.01),
-        'RIS_element_groups'     : (4,4),
+        'RIS_element_groups'     : (1,1),
         'RIS_phase_values'       : [np.exp(1j*0), np.exp(1j*1)],
         'TX_locations'           : [0,30,2],
         'TX_RIS_link_mult_factor': Power,
@@ -206,7 +197,7 @@ if __name__ == '__main__':
     TX_clusters_distances, \
     clusters_RIS_distances, \
     thetas_AoA, \
-    phis_AoA = generate_clusters(setup.TX_locations.reshape(-1), setup.RIS_coordinates, lambda_p=1.9)
+    phis_AoA = generate_clusters(setup.TX_locations.reshape(-1), setup.RIS_coordinates, lambda_p=1.9, num_clusters=4)
 
 
 
@@ -221,21 +212,32 @@ if __name__ == '__main__':
     params['color_by_height'] = False
     plot_setup_3D(RIS_list, setup.TX_locations.reshape((1,3)), center_RX_position.reshape(1,3), params=params, scatterers_positions=scatterers_positions)
     plot_positions(np.array([ris.position for ris in RIS_list]), setup.TX_locations.reshape((1, 3)), center_RX_position.reshape(1, 3),)
-    plt.show()
+    #plt.show()
+
+    # H = calculate_H(RIS_list, setup.TX_locations.reshape(-1), TX_clusters_distances, clusters_RIS_distances, thetas_AoA,
+    #                 phis_AoA)
 
 
-    H = calculate_H(RIS_list, setup.TX_locations.reshape(-1), TX_clusters_distances, clusters_RIS_distances, thetas_AoA, phis_AoA)
-
+    total_RIS_elements = setup.num_RIS*setup.RIS_elements[0]*setup.RIS_elements[1]
+    total_RIS_controllable_elements = total_RIS_elements // (setup.RIS_element_groups[0] * setup.RIS_element_groups[1])
+    dataset = SimulationDataset(setup.num_RIS, total_RIS_elements, total_RIS_controllable_elements)
 
     for i in tqdm(range(train_RX_locations.shape[0])):
-
-
+        H                     = calculate_H(RIS_list, setup.TX_locations.reshape(-1), TX_clusters_distances,
+                                            clusters_RIS_distances, thetas_AoA, phis_AoA)
         RX_clusters_distances = calculate_RX_scatterers_distances(Sc, center_RX_position, cluster_positions)
         G, h0                 = calculate_G_and_h0(RIS_list, setup.TX_locations.reshape(1,3), train_RX_locations[i,:])
-        result                = exhaustive_search(RIS_list, H, G, h0, setup.noise_power, batch_size=2*12, show_progress_bar=True)
+        configuration, snr    = exhaustive_search(RIS_list, H, G, h0, setup.noise_power, batch_size=1, show_progress_bar=False)
+
+        print("SNR: {}".format(snr))
+        print("Optimal Configuration: {}".format(configuration))
+
+        dataset.add_datapoint(H, G, h0, train_RX_locations[i,:], configuration, snr)
 
 
-        break
+    dataset.save("./data/test_simulation.npy")
+
+
 
 
 

@@ -31,7 +31,7 @@ class BinaryEnumerator:
 
 
     def __next__(self):
-        if self._curr_num >= self.max_number:
+        if self._curr_num > self.max_number:
             raise StopIteration
 
 

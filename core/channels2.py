@@ -14,16 +14,29 @@ wavelength = lightspeed/float(frequency)
 k          = 2*pi/wavelength
 q          = 0.285
 
+
+# INDOOR
+# f0_LOS     = 24.2*10**9
+# n_LOS      = 3.19
+# b_LOS      = 0.06
+# sigma_LOS  = 8.29
+#
+# f0_NLOS    = 24.2*10**9
+# n_NLOS     = 1.73
+# b_NLOS     = 0
+# sigma_NLOS = 3.02
+
+
+# OUTDOOR
 f0_LOS     = 24.2*10**9
-n_LOS      = 3.19
-b_LOS      = 0.06
-sigma_LOS  = 8.29
+n_LOS      = 1.98
+b_LOS      = 0
+sigma_LOS  = 3.1
 
 f0_NLOS    = 24.2*10**9
-n_NLOS     = 1.73
+n_NLOS     = 3.19
 b_NLOS     = 0
-sigma_NLOS = 3.02
-
+sigma_NLOS = 8.2
 
 
 
@@ -33,7 +46,7 @@ sigma_NLOS = 3.02
 def calculate_pathloss(total_distance: Union[float, np.ndarray], isLOS: bool, wallExists=False)->Union[np.ndarray, float]:
     """
 
-    Calculate the attenuation of an indoor link using the 5G path loss model (the close-in free space reference distance
+    Calculate the attenuation of an outdoor link using the 5G path loss model (the close-in free space reference distance
     model with frequency-dependent path loss exponent). Using equation (5) from [Basar 2020]. Output in dB.
 
     :param total_distance: The distance(s) of the total path between the two endpoints of the link. Can be either a numpy array or a float. Note for scattered paths that the total length of the arc is expected.
@@ -67,7 +80,7 @@ def calculate_pathloss(total_distance: Union[float, np.ndarray], isLOS: bool, wa
         pathloss = pathloss[0]
 
     if wallExists:
-        pathloss -= 10 # todo: Make it + !!!!
+        pathloss += 10
 
     return pathloss
 
@@ -397,11 +410,16 @@ def calculate_RX_scatterers_distances(Sc, RX_coordinates, cluster_positions):
 
 def generate_clusters(TX_coordinates : Vector3D,
                       RIS_Coordinates: Matrix3DCoordinates,
-                      lambda_p       : float):
+                      lambda_p       : float,
+                      num_clusters=None):
 
     # assuming TX is on the yz plane and all RIS on the xz plane
 
-    C             = np.maximum(2, np.random.poisson(lambda_p))
+    if num_clusters is None:
+        C = np.maximum(2, np.random.poisson(lambda_p))
+    else:
+        C = num_clusters
+
     Sc            = np.random.randint(1, 30, size=C)
     Smax          = np.max(Sc)
 
