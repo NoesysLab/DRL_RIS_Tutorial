@@ -299,6 +299,31 @@ def plot_RIS_3D(ris: RIS, TX_pos: Vector3D, RX_pos: Vector3D, ax=None):
     ax.set_zlim([0,3])
 
 
+
+
+
+
+
+
+
+def plot_simulation(RIS_list, cluster_positions, TX_coordinates, center_RX_position):
+    scatterers_positions = cluster_positions.reshape((-1, 3))  # Shape (C*Smax, 3)
+    scatterers_positions = scatterers_positions[np.all(scatterers_positions != 0, axis=1)]
+
+    params = grid_plot_params.copy()
+    params['zlims'] = [0, 3]
+    params['color_by_height'] = False
+    plot_setup_3D(RIS_list, TX_coordinates.reshape((1, 3)), center_RX_position.reshape(1, 3), params=params,
+                  scatterers_positions=scatterers_positions)
+    plot_positions(np.array([ris.position for ris in RIS_list]), TX_coordinates.reshape((1, 3)),
+                   center_RX_position.reshape(1, 3), )
+    plt.show()
+
+
+
+
+
+
 if __name__ == '__main__':
 
 

@@ -5,10 +5,12 @@ import matplotlib.pyplot as plt
 
 from typing import List, Tuple
 
-from core.setup import Setup, initialize_simulation_from_setup
+
 from core.surfaces import RIS
-from core.channels2 import generate_clusters, RIS_RX_channel_model, TX_RIS_channel_model, \
+from core.channels import generate_clusters, RIS_RX_channel_model, TX_RIS_channel_model, \
     TX_RX_channel_model, calculate_RX_scatterers_distances
+
+
 from utils.binary_space import BinaryEnumerator
 from utils.data_handlers import SimulationDataset
 from utils.misc import ray_to_elevation_azimuth, diag_per_row
@@ -76,6 +78,7 @@ def exhaustive_search(ris_list: List[RIS],
 
 def calculate_H(ris_list: List[RIS],
                 TX_location,
+                Sc,
                 TX_scatterers_distances,
                 scatterers_RIS_distances,
                 thetas_AoA,
@@ -110,6 +113,9 @@ def calculate_H(ris_list: List[RIS],
 def calculate_G_and_h0(ris_list: List[RIS],
                        TX_location,
                       RX_location,):
+
+    TX_location = TX_location.reshape(1, 3)
+
 
     K = sum([ris.total_elements for ris in ris_list])
 
@@ -154,104 +160,93 @@ def calculate_G_and_h0(ris_list: List[RIS],
 
 
 
-if __name__ == '__main__':
-
-    start_t = datetime.now()
-
-    isWall = True
-    Power = 1
-
-
-
-    setup = Setup.from_config({'test': {
-        'num_RIS'                : 2,#4,
-        'RIS_coordinates'        : [[15,25,2], [15, 35 ,2], ],#[25, 25, 2], [25,35,2]],
-        'RIS_elements'           : (2,2),
-        'element_dimensions'     : (0.3,0.01),
-        'RIS_element_groups'     : (1,1),
-        'RIS_phase_values'       : [np.exp(1j*0), np.exp(1j*1)],
-        'TX_locations'           : [0,30,2],
-        'TX_RIS_link_mult_factor': Power,
-        'RX_RIS_link_mult_factor': Power,
-        'TX_RX_link_mult_factor' : Power,
-        'TX_RX_link_is_LOS'      : not isWall,
-        'train_RX_square_center' : (20,30),
-        'train_RX_square_width'  : 1,
-        'train_RX_num_positions' : 5000,
-        'train_RX_height'        : 1,
-        'noise_power'            : 100,
-        }})
-
-    RIS_list,\
-    TX_RIS_link_info, \
-    RX_RIS_link_info, \
-    TX_RX_link_info, \
-    train_RX_locations, \
-    test_RX_locations, \
-    center_RX_position = initialize_simulation_from_setup(setup)
-
-    from utils.plotting import plot_setup_3D, plot_positions, grid_plot_params
-
-    Sc, \
-    cluster_positions, \
-    TX_clusters_distances, \
-    clusters_RIS_distances, \
-    thetas_AoA, \
-    phis_AoA = generate_clusters(setup.TX_locations.reshape(-1), setup.RIS_coordinates, lambda_p=1.9, num_clusters=4)
-
-
-
-    scatterers_positions = cluster_positions.reshape((-1,3)) # Shape (C*Smax, 3)
-    scatterers_positions = scatterers_positions[np.all(scatterers_positions != 0, axis=1)]
-    #print(scatterers_positions)
-
-
-
-    params = grid_plot_params.copy()
-    #params['zlims'] = [0, 3]
-    params['color_by_height'] = False
-    plot_setup_3D(RIS_list, setup.TX_locations.reshape((1,3)), center_RX_position.reshape(1,3), params=params, scatterers_positions=scatterers_positions)
-    plot_positions(np.array([ris.position for ris in RIS_list]), setup.TX_locations.reshape((1, 3)), center_RX_position.reshape(1, 3),)
-    #plt.show()
-
-    # H = calculate_H(RIS_list, setup.TX_locations.reshape(-1), TX_clusters_distances, clusters_RIS_distances, thetas_AoA,
-    #                 phis_AoA)
-
-
-    total_RIS_elements = setup.num_RIS*setup.RIS_elements[0]*setup.RIS_elements[1]
-    total_RIS_controllable_elements = total_RIS_elements // (setup.RIS_element_groups[0] * setup.RIS_element_groups[1])
-    dataset = SimulationDataset(setup.num_RIS, total_RIS_elements, total_RIS_controllable_elements)
-
-    for i in tqdm(range(train_RX_locations.shape[0])):
-        H                     = calculate_H(RIS_list, setup.TX_locations.reshape(-1), TX_clusters_distances,
-                                            clusters_RIS_distances, thetas_AoA, phis_AoA)
-        RX_clusters_distances = calculate_RX_scatterers_distances(Sc, center_RX_position, cluster_positions)
-        G, h0                 = calculate_G_and_h0(RIS_list, setup.TX_locations.reshape(1,3), train_RX_locations[i,:])
-        configuration, snr    = exhaustive_search(RIS_list, H, G, h0, setup.noise_power, batch_size=1, show_progress_bar=False)
-
-        print("SNR: {}".format(snr))
-        print("Optimal Configuration: {}".format(configuration))
-
-        dataset.add_datapoint(H, G, h0, train_RX_locations[i,:], configuration, snr)
-
-
-    dataset.save("./data/test_simulation.npy")
-
-
-
-
-
-
-
-
-
-
-
-
-    end_t = datetime.now()
-    duration = end_t-start_t
-    print("Run simulation with {} RIS, {} phases, {} elements grouped in {}.  Time elapsed: {}".format(
-        setup.num_RIS, len(setup.RIS_phase_values), setup.RIS_elements, setup.RIS_element_groups, duration))
-
-
-
+# if __name__ == '__main__':
+#
+#     start_t = datetime.now()
+#
+#     isWall = True
+#     Power = 1
+#
+#
+#
+#     setup = Setup.from_config({'test': {
+#         'num_RIS'                : 2,#4,
+#         'RIS_coordinates'        : [[15,25,2], [15, 35 ,2], ],#[25, 25, 2], [25,35,2]],
+#         'RIS_elements'           : (2,2),
+#         'element_dimensions'     : (0.3,0.01),
+#         'RIS_element_groups'     : (1,1),
+#         'RIS_phase_values'       : [np.exp(1j*0), np.exp(1j*1)],
+#         'TX_locations'           : [0,30,2],
+#         'TX_RIS_link_mult_factor': Power,
+#         'RX_RIS_link_mult_factor': Power,
+#         'TX_RX_link_mult_factor' : Power,
+#         'TX_RX_link_is_LOS'      : not isWall,
+#         'train_RX_square_center' : (20,30),
+#         'train_RX_square_width'  : 1,
+#         'train_RX_num_positions' : 5000,
+#         'train_RX_height'        : 1,
+#         'noise_power'            : 100,
+#         }})
+#
+#     RIS_list,\
+#     TX_RIS_link_info, \
+#     RX_RIS_link_info, \
+#     TX_RX_link_info, \
+#     train_RX_locations, \
+#     test_RX_locations, \
+#     center_RX_position = initialize_simulation_from_setup(setup)
+#
+#     from utils.plotting import plot_setup_3D, plot_positions, grid_plot_params
+#
+#     Sc, \
+#     cluster_positions, \
+#     TX_clusters_distances, \
+#     clusters_RIS_distances, \
+#     thetas_AoA, \
+#     phis_AoA = generate_clusters(setup.TX_locations.reshape(-1), setup.RIS_coordinates, lambda_p=1.9, num_clusters=4)
+#
+#
+#
+#     scatterers_positions = cluster_positions.reshape((-1,3)) # Shape (C*Smax, 3)
+#     scatterers_positions = scatterers_positions[np.all(scatterers_positions != 0, axis=1)]
+#     #print(scatterers_positions)
+#
+#
+#
+#     params = grid_plot_params.copy()
+#     #params['zlims'] = [0, 3]
+#     params['color_by_height'] = False
+#     plot_setup_3D(RIS_list, setup.TX_locations.reshape((1,3)), center_RX_position.reshape(1,3), params=params, scatterers_positions=scatterers_positions)
+#     plot_positions(np.array([ris.position for ris in RIS_list]), setup.TX_locations.reshape((1, 3)), center_RX_position.reshape(1, 3),)
+#     #plt.show()
+#
+#     # H = calculate_H(RIS_list, setup.TX_locations.reshape(-1), TX_clusters_distances, clusters_RIS_distances, thetas_AoA,
+#     #                 phis_AoA)
+#
+#
+#     total_RIS_elements = setup.num_RIS*setup.RIS_elements[0]*setup.RIS_elements[1]
+#     total_RIS_controllable_elements = total_RIS_elements // (setup.RIS_element_groups[0] * setup.RIS_element_groups[1])
+#     dataset = SimulationDataset(setup.num_RIS, total_RIS_elements, total_RIS_controllable_elements)
+#
+#     for i in tqdm(range(train_RX_locations.shape[0])):
+#         H                     = calculate_H(RIS_list, setup.TX_locations.reshape(-1), TX_clusters_distances,
+#                                             clusters_RIS_distances, thetas_AoA, phis_AoA)
+#         RX_clusters_distances = calculate_RX_scatterers_distances(Sc, center_RX_position, cluster_positions)
+#         G, h0                 = calculate_G_and_h0(RIS_list, setup.TX_locations.reshape(1,3), train_RX_locations[i,:])
+#         configuration, snr    = exhaustive_search(RIS_list, H, G, h0, setup.noise_power, batch_size=1, show_progress_bar=False)
+#
+#         print("SNR: {}".format(snr))
+#         print("Optimal Configuration: {}".format(configuration))
+#
+#         dataset.add_datapoint(H, G, h0, train_RX_locations[i,:], configuration, snr)
+#
+#
+#     dataset.save("./data/test_simulation.npy")
+#
+#     end_t = datetime.now()
+#     duration = end_t-start_t
+#     print("Run simulation with {} RIS, {} phases, {} elements grouped in {}.  Time elapsed: {}".format(
+#         setup.num_RIS, len(setup.RIS_phase_values), setup.RIS_elements, setup.RIS_element_groups, duration))
+#
+#
+#

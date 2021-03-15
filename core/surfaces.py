@@ -173,7 +173,7 @@ class RIS:
             raise ValueError("Expected a 3D position vector")
 
         self.shape                  = element_grid_shape                                              # (rows,cols) for the grid of elements
-        self.group_shape            = element_group_size if element_grid_shape else (1,1)             # (rows,cols) for each subgroup of the grid of elements
+        self.group_shape            = element_group_size if element_grid_shape is not None else (1,1) # (rows,cols) for each subgroup of the grid of elements
         self.facing_vecor           = facing_direction
         self.element_dimensions     = element_dimensions                                              # (width,height) for each element
         self.position               = position                                                        # 3D position of the RIS (equals to the position of element (0,0) )

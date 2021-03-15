@@ -11,8 +11,7 @@ import numpy as np
 from tqdm import tqdm
 
 
-from core.channels import Channel
-from utils.complex import sample_gaussian_complex_matrix
+from deprecated.channels import Channel
 from core.surfaces import RIS
 
 

@@ -1,12 +1,8 @@
 import numpy as np
-from scipy import stats
-from tqdm import tqdm
 
 from core.setup import Setup, initialize_simulation_from_setup
-from core.surfaces import RIS
-from core.channels import Channel, RayleighFadeLink
-from scripts.exaustive_search_tensorflow import exhaustive_snr_search
-from utils.plotting import plot_positions
+from deprecated.channels import Channel
+from deprecated import exhaustive_snr_search
 
 from datetime import datetime
 import matplotlib.pyplot as plt

@@ -170,7 +170,12 @@ def get_2D_positions_on_square_grid(num_positions: int, xy_center: Tuple[float,f
 
 
 
-def get_receiver_positions(placement_type: str, num_positions: int, xy_center: Tuple[float,float], width: float, z_value:Union[float,Iterable]=None)->Matrix3DCoordinates:
+def get_receiver_positions(placement_type:str,
+                           num_positions: int,
+                           xy_center: Tuple[float,float],
+                           width: float,
+                           z_value:Union[float,Iterable]=None
+                           )->Matrix3DCoordinates:
     if placement_type == 'grid':
         return get_2D_positions_on_square_grid(num_positions, xy_center, width, z_value)
     elif placement_type == 'random':

@@ -141,7 +141,7 @@ class SimulationDataset:
 
 
         if column_name in ['H','G', 'h']:
-            out = np.complex(real=out[:,0], imag=out[:,1])
+            out = np.complex(real=out[:,0:K], imag=out[:,K:])
 
 
         return out
