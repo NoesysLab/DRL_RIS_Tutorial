@@ -96,11 +96,8 @@ for i in iterator:
     if verbosity >= 3:
         tqdm.write("Best configuration: {} | SNR: {}".format(configuration, snr))
 
-
     dataset.add_datapoint(H, G, h0, RX_locations[i, :], configuration, snr)
 
-    if i>10:
-        break
 
 
 
