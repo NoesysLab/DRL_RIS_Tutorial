@@ -6,8 +6,7 @@ from tqdm import tqdm
 from deprecated import globals
 from core.surfaces import RIS
 from utils.binary_space import BinaryEnumerator
-from utils.misc import Vector, Matrix2D, Vector3D
-from utils.complex import sample_gaussian_complex_matrix
+from utils.misc import Vector, Matrix2D, Vector3D, sample_gaussian_complex_matrix
 
 
 def calc_pathloss(tx_location,

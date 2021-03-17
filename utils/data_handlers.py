@@ -1,5 +1,12 @@
 import numpy as np
-
+import os, sys
+import pickle
+from pathlib import Path
+import hashlib
+import yaml
+from configparser import ConfigParser
+from collections import OrderedDict
+import json
 
 class SimulationDataset:
     def __init__(self,
@@ -141,10 +148,152 @@ class SimulationDataset:
 
 
         if column_name in ['H','G', 'h']:
-            out = np.complex(real=out[:,0:K], imag=out[:,K:])
-
+            out = out[:,0:K] + 1j * out[:,K:]
 
         return out
 
 
 
+
+
+
+
+
+
+
+
+# def custom_hash(dict_: dict):
+#     h = hashlib.blake2b(digest_size=6, salt=b'123')
+#     for key, value in dict_.items():
+#         h.update("{}:{}".format(key, value).encode('utf8'))
+#     return h.hexdigest()
+
+def custom_hash(data: str):
+    h = hashlib.blake2b(digest_size=12, salt=b'123')
+    h.update(data.encode('utf8'))
+    return h.hexdigest()
+
+
+
+class DataSaver:
+    """
+    A class that keeps set_configuration of the experiment configurations and saves user-defined data in separate directories automatically.
+    It can be conditioned on any (hashable) objects - i.e. configuration which is saved alongside the rest of the files.
+    Each configuration is stored in a separate directory named using the configuration's hash
+    It can save and load custom objects to pickle or it provides the appropriate path for custom filenames to be saved independently (e.g. from matplotlib, tensorflow, e.t.c)
+    """
+    def __init__(self, experiment_name: str, save_dir='./data', ):
+        """
+        :param experiment_name: A general name for the experiment
+        :param save_dir: Top level directory to construct a configuration subdir and save inside
+        """
+        if '.' in experiment_name:
+            experiment_name = '.'.join(experiment_name.split('.')[:-1])
+
+        self.experiment_name = experiment_name
+        self.save_dir        = save_dir
+        self.configuration   = None # type: ConfigParser
+        self._hash           = None
+
+    def _get_experiment_dir(self):
+        """
+        :return: The exact directory in which data will be stored for this configuration
+        """
+        if self._hash is None:
+            raise ValueError("Not tracking any objects yet.")
+        return os.path.join(self.save_dir, self.experiment_name, str(self._hash))
+
+    def _store_configuration_file(self):
+        """
+        Save a YAML containing the configuration information
+        :return:
+        """
+        dirname = self._get_experiment_dir()
+        Path(dirname).mkdir(parents=True, exist_ok=True)
+        filename = os.path.join(dirname, self.experiment_name+".ini")
+        with open(filename, 'w') as fout:
+            self.configuration.write(fout)
+
+
+    def set_configuration(self, config: ConfigParser, ignore_sections=('program_options', 'constants')):
+        """
+        Formulate a configuration with any custom objects. This defines a unique directory in which data will be stored
+        :return: A reference to the object for chaining
+        """
+        self.configuration = config
+        config_sections = set(config.sections()) - set(ignore_sections)
+        sections_data   = [config._sections[section] for section in config_sections]
+        data            = {k: v for d in sections_data for k, v in d.items()}
+        #data            = OrderedDict(sorted(data.items()))
+        data            = str(json.dumps(data, sort_keys=True))
+        # data = 'wiiwdhfqiwudgqiywfguiyqcbuyyvcv82t``'
+        # print(data)
+        self._hash      = custom_hash(data)
+        self._store_configuration_file()
+        return self
+
+    def store_misc_data(self, data, filename, nested_dir=None):
+        """
+        Save a serializable object using pickle
+        :param data: The object to be stored
+        :param filename: The filename (without path)
+        :param nested_dir: Potential inner directories that will be made
+        :return:
+        """
+
+        filename = self.get_save_filename(filename, nested_dir)
+        with open(filename, 'wb') as fout:
+            pickle.dump(data, fout)
+
+    def load_misc_data(self, filename, nested_dir=None):
+        """
+        Load a previously stored file for this configuration
+        :param filename: Must not include path
+        :param nested_dir: Potential inner directories in which the file exists
+        :return: Any type of object
+        """
+        filename = self.get_save_filename(filename, nested_dir)
+        with open(filename, 'rb') as fin:
+            data     = pickle.load(fin)
+            return data
+
+    def store_dict(self, dictionary, filename="results.yml"):
+        """
+        Store human-readable results in a text file
+        :return:
+        """
+        filename = self.get_save_filename(filename)
+        try:
+            with open(filename, 'r') as yamlfile:
+                cur_yaml = yaml.load(yamlfile, Loader=yaml.FullLoader)
+                if cur_yaml:
+                    cur_yaml.update(dictionary)
+        except FileNotFoundError:
+            cur_yaml = None
+
+        if cur_yaml:
+            with open(filename, 'w') as yamlfile:
+                yaml.dump(cur_yaml, yamlfile)
+        else:
+            with open(filename, 'w') as yamlfile:
+                yaml.dump(dictionary, yamlfile)
+
+
+    def get_save_filename(self, filename, nested_dir=None):
+        """
+        Construct the exact pathname. Create directories if do not exist
+        :param filename:
+        :param nested_dir:
+        :return:
+        """
+        dirname = self._get_experiment_dir()
+        if nested_dir:
+            dirname = os.path.join(dirname, nested_dir)
+        Path(dirname).mkdir(parents=True, exist_ok=True)
+        filename = os.path.join(dirname, filename)
+        return filename
+
+
+    def __str__(self):
+        s = "Setup {} with hash: {}".format(self.experiment_name, self._hash)
+        return s

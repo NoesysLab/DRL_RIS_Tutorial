@@ -1,4 +1,5 @@
 import numpy as np
+from numpy import pi, cos, sin
 from tqdm import tqdm
 from datetime import datetime
 import matplotlib.pyplot as plt
@@ -7,13 +8,26 @@ from typing import List, Tuple
 
 
 from core.surfaces import RIS
-from core.channels import generate_clusters, RIS_RX_channel_model, TX_RIS_channel_model, \
-    TX_RX_channel_model, calculate_RX_scatterers_distances
+import core.channels as channels
+from core.channels import RIS_RX_channel_model, TX_RIS_channel_model, TX_RX_channel_model
 
 
 from utils.binary_space import BinaryEnumerator
-from utils.data_handlers import SimulationDataset
+from utils.custom_configparser import CustomConfigParser
+from utils.custom_types import Vector3D, Matrix3DCoordinates
 from utils.misc import ray_to_elevation_azimuth, diag_per_row
+
+
+
+def initialize_from_config(config: CustomConfigParser):
+    channels.initialize_from_config(config)
+
+
+
+
+
+
+
 
 
 def exhaustive_search(ris_list: List[RIS],
@@ -155,98 +169,122 @@ def calculate_G_and_h0(ris_list: List[RIS],
 
 
 
+def _generate_scatterers_positions(C, Sc, Smax, TX_coordinates, RIS_Coordinates, phi_TX, theta_TX):
+    y_bounds = [np.min(RIS_Coordinates[:, 1])+0.01, np.max(RIS_Coordinates[:, 1])-0.01]
+    x_bounds = [TX_coordinates[0]+0.01, np.min(RIS_Coordinates[:, 0])-0.01]
+    z_bounds = [0, TX_coordinates[2]-0.01]
+
+    bounds = np.array([x_bounds, y_bounds, z_bounds])
+
+    cluster_positions = np.zeros((C, Smax, 3))
+
+    min_TX_RIS_dist = np.min(np.linalg.norm(TX_coordinates - RIS_Coordinates, axis=1))
+
+
+    for c in range(C):
+
+        cluster_centroid_coords = np.random.uniform(low=bounds[:,0], high=bounds[:,1])
+
+        for s in range(Sc[c]):
+
+            rotation_matrix     = [cos(theta_TX[c][s])*cos(phi_TX[c][s]), cos(theta_TX[c][s])*sin(phi_TX[c][s]), sin(theta_TX[c][s])]
+            scatterer_positions = np.array(rotation_matrix) * np.random.rand(3) + cluster_centroid_coords
+            scatterer_positions = np.clip(scatterer_positions, a_min=bounds[:,0], a_max=bounds[:,1])
+
+
+            cluster_positions[c, s, :] = scatterer_positions #[x, y, z]
+
+
+
+    return cluster_positions
+
+
+
+def _calculate_RIS_scatterers_distances_and_angles(C, Sc, Smax, RIS_Coordinates, cluster_positions):
+    num_RIS = RIS_Coordinates.shape[0]
+
+    clusters_RIS_distances = np.zeros((C, Smax, num_RIS))
+    thetas_AoA             = np.zeros((C, Smax, num_RIS))
+    phis_AoA               = np.zeros((C, Smax, num_RIS))
+
+    for r in range(num_RIS):
+
+        x_RIS = RIS_Coordinates[r,0]
+        y_RIS = RIS_Coordinates[r,1]
+        z_RIS = RIS_Coordinates[r,2]
+
+        for c in range(C):
+            for s in range(Sc[c]):
+                x,y,z                         = cluster_positions[c,s,:]
+                b_c_s                         = np.linalg.norm(RIS_Coordinates[r, :] - cluster_positions[c,s,:])
+                clusters_RIS_distances[c,s,r] = b_c_s
+                thetas_AoA[c,s,r]             = np.sign(z - z_RIS) * np.arcsin( np.abs(z_RIS - z) / b_c_s )
+                phis_AoA[c,s,r]               = np.sign(x_RIS - x) * np.arctan( np.abs(x_RIS - x) / np.abs(y_RIS - y) )
+
+    return clusters_RIS_distances, thetas_AoA, phis_AoA
+
+
+
+def calculate_RX_scatterers_distances(Sc, RX_coordinates, cluster_positions):
+    RX_clusters_distances = np.linalg.norm(RX_coordinates[None, None, :] - cluster_positions, axis=2)  # Shape (C, Sc)
+
+    C = len(Sc)
+    Smax = np.max(Sc)
+
+    for c in range(C):
+        for s in range(Sc[c], Smax):
+            RX_clusters_distances[c, s] = 0
+
+    return RX_clusters_distances
 
 
 
 
 
-# if __name__ == '__main__':
-#
-#     start_t = datetime.now()
-#
-#     isWall = True
-#     Power = 1
-#
-#
-#
-#     setup = Setup.from_config({'test': {
-#         'num_RIS'                : 2,#4,
-#         'RIS_coordinates'        : [[15,25,2], [15, 35 ,2], ],#[25, 25, 2], [25,35,2]],
-#         'RIS_elements'           : (2,2),
-#         'element_dimensions'     : (0.3,0.01),
-#         'RIS_element_groups'     : (1,1),
-#         'RIS_phase_values'       : [np.exp(1j*0), np.exp(1j*1)],
-#         'TX_locations'           : [0,30,2],
-#         'TX_RIS_link_mult_factor': Power,
-#         'RX_RIS_link_mult_factor': Power,
-#         'TX_RX_link_mult_factor' : Power,
-#         'TX_RX_link_is_LOS'      : not isWall,
-#         'train_RX_square_center' : (20,30),
-#         'train_RX_square_width'  : 1,
-#         'train_RX_num_positions' : 5000,
-#         'train_RX_height'        : 1,
-#         'noise_power'            : 100,
-#         }})
-#
-#     RIS_list,\
-#     TX_RIS_link_info, \
-#     RX_RIS_link_info, \
-#     TX_RX_link_info, \
-#     train_RX_locations, \
-#     test_RX_locations, \
-#     center_RX_position = initialize_simulation_from_setup(setup)
-#
-#     from utils.plotting import plot_setup_3D, plot_positions, grid_plot_params
-#
-#     Sc, \
-#     cluster_positions, \
-#     TX_clusters_distances, \
-#     clusters_RIS_distances, \
-#     thetas_AoA, \
-#     phis_AoA = generate_clusters(setup.TX_locations.reshape(-1), setup.RIS_coordinates, lambda_p=1.9, num_clusters=4)
-#
-#
-#
-#     scatterers_positions = cluster_positions.reshape((-1,3)) # Shape (C*Smax, 3)
-#     scatterers_positions = scatterers_positions[np.all(scatterers_positions != 0, axis=1)]
-#     #print(scatterers_positions)
-#
-#
-#
-#     params = grid_plot_params.copy()
-#     #params['zlims'] = [0, 3]
-#     params['color_by_height'] = False
-#     plot_setup_3D(RIS_list, setup.TX_locations.reshape((1,3)), center_RX_position.reshape(1,3), params=params, scatterers_positions=scatterers_positions)
-#     plot_positions(np.array([ris.position for ris in RIS_list]), setup.TX_locations.reshape((1, 3)), center_RX_position.reshape(1, 3),)
-#     #plt.show()
-#
-#     # H = calculate_H(RIS_list, setup.TX_locations.reshape(-1), TX_clusters_distances, clusters_RIS_distances, thetas_AoA,
-#     #                 phis_AoA)
-#
-#
-#     total_RIS_elements = setup.num_RIS*setup.RIS_elements[0]*setup.RIS_elements[1]
-#     total_RIS_controllable_elements = total_RIS_elements // (setup.RIS_element_groups[0] * setup.RIS_element_groups[1])
-#     dataset = SimulationDataset(setup.num_RIS, total_RIS_elements, total_RIS_controllable_elements)
-#
-#     for i in tqdm(range(train_RX_locations.shape[0])):
-#         H                     = calculate_H(RIS_list, setup.TX_locations.reshape(-1), TX_clusters_distances,
-#                                             clusters_RIS_distances, thetas_AoA, phis_AoA)
-#         RX_clusters_distances = calculate_RX_scatterers_distances(Sc, center_RX_position, cluster_positions)
-#         G, h0                 = calculate_G_and_h0(RIS_list, setup.TX_locations.reshape(1,3), train_RX_locations[i,:])
-#         configuration, snr    = exhaustive_search(RIS_list, H, G, h0, setup.noise_power, batch_size=1, show_progress_bar=False)
-#
-#         print("SNR: {}".format(snr))
-#         print("Optimal Configuration: {}".format(configuration))
-#
-#         dataset.add_datapoint(H, G, h0, train_RX_locations[i,:], configuration, snr)
-#
-#
-#     dataset.save("./data/test_simulation.npy")
-#
-#     end_t = datetime.now()
-#     duration = end_t-start_t
-#     print("Run simulation with {} RIS, {} phases, {} elements grouped in {}.  Time elapsed: {}".format(
-#         setup.num_RIS, len(setup.RIS_phase_values), setup.RIS_elements, setup.RIS_element_groups, duration))
-#
-#
-#
+
+
+
+def generate_clusters(TX_coordinates : Vector3D,
+                      RIS_Coordinates: Matrix3DCoordinates,
+                      lambda_p       : float,
+                      num_clusters=None):
+
+    # assuming TX is on the yz plane and all RIS on the xz plane
+
+    if num_clusters is None:
+        C = np.maximum(2, np.random.poisson(lambda_p))
+    else:
+        C = num_clusters
+
+    Sc            = np.random.randint(1, 30, size=C)
+    Smax          = np.max(Sc)
+
+
+    mean_phi_TX   = np.random.uniform(-pi/2, pi/2, size=C)
+    mean_theta_TX = np.random.uniform(-pi/4, pi/4, size=C)
+
+    phi_TX        = [np.random.laplace(mean_phi_TX[c]  , 5*pi/180, size=Sc[c]) for c in range(C)]
+    theta_TX      = [np.random.laplace(mean_theta_TX[c], 5*pi/180, size=Sc[c]) for c in range(C)]
+
+
+    cluster_positions = _generate_scatterers_positions(C, Sc, Smax, TX_coordinates, RIS_Coordinates, phi_TX, theta_TX)
+
+    TX_clusters_distances = np.linalg.norm(TX_coordinates[None,None,:]-cluster_positions, axis=2) # Shape (C, Sc)
+
+    for c in range(C):
+        for s in range(Sc[c], Smax):
+            TX_clusters_distances[c,s] = 0
+
+
+    clusters_RIS_distances,\
+    thetas_AoA,\
+    phis_AoA = _calculate_RIS_scatterers_distances_and_angles(C, Sc, Smax, RIS_Coordinates, cluster_positions)
+
+    return Sc, cluster_positions, TX_clusters_distances, clusters_RIS_distances, thetas_AoA, phis_AoA
+
+
+
+
+
+
+

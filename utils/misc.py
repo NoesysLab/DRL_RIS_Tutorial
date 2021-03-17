@@ -1,3 +1,5 @@
+from typing import Tuple
+
 import numpy as np
 from utils.custom_types import *
 
@@ -125,3 +127,7 @@ def ray_to_elevation_azimuth(starting_point: Union[Vector3D, Matrix3DCoordinates
 
 def safe_log10(A: np.ndarray)->np.ndarray:
     return np.log10(A, out=np.zeros_like(A), where=(A!=0))
+
+
+def sample_gaussian_complex_matrix(shape: Tuple):
+    return  np.random.randn(*shape) + 1j * np.random.randn(*shape)

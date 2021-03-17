@@ -1,11 +1,19 @@
+from typing import Dict, Iterator
+
 from pyparsing import (Literal, CaselessLiteral, Word, Combine, Group, Optional,
                        ZeroOrMore, Forward, nums, alphas, oneOf, ParseException)
 import math
 import operator
 
-__author__ = 'Paul McGuire'
-__version__ = '$Revision: 0.0 $'
-__date__ = '$Date: 2009-03-20 $'
+
+
+import numpy as np
+import configparser
+from pprint import pprint
+
+
+
+
 __source__ = '''http://pyparsing.wikispaces.com/file/view/fourFn.py
 http://pyparsing.wikispaces.com/message/view/home/15549426
 '''
@@ -13,6 +21,7 @@ __note__ = '''
 All I've done is rewrap Paul McGuire's fourFn.py as a class, so I can use it
 more easily in other places.
 '''
+
 
 
 class NumericStringParser(object):
@@ -123,3 +132,79 @@ class NumericStringParser(object):
             return num_string
         except AttributeError:
             return num_string
+
+
+
+
+
+
+
+
+__numericStringParser = NumericStringParser()
+
+
+def parse_list(l_str: str, is_numerical=True, dtype=None):
+    l_str = l_str.replace("[","").replace("]","")
+    l     = l_str.split(',')
+    l     = map(lambda item: item.strip(), l)
+    if is_numerical:
+        return np.array([parse_expr(item, dtype) for item in l])
+    else:
+        return l
+
+def parse_expr(expr_str, dtype=None):
+    val = __numericStringParser.eval(expr_str, parseAll=True)
+    if dtype is not None:
+        return dtype(val)
+    else:
+        return val
+
+
+def print_aligned(dict_: Dict):
+    def to_aligned_records(dict_: Dict,
+                           *,
+                           sep: str = ' ') -> Iterator[str]:
+        """Yields key-value pairs as strings that will be aligned when printed"""
+        max_key_len = max(map(len, dict_.keys()))
+        format_string = '{{key:{max_len}}} :{sep}{{value}}'.format(max_len=max_key_len, sep=sep)
+        for key, value in dict_.items():
+            yield format_string.format(key=key, value=value)
+
+    print(*to_aligned_records(dict_), sep='\n')
+
+
+class CustomConfigParser(configparser.ConfigParser):
+
+    def getfloat(self, section: str, option: str, **kwargs) -> float:
+        f_str = super().get(section, option, **kwargs)
+        return parse_expr(f_str, dtype=float)
+
+    def getint(self, section: str, option: str, **kwargs) -> int:
+        i_str = super().get(section, option, **kwargs)
+        return parse_expr(i_str, dtype=int)
+
+    def getlist(self,section: str, option: str, is_numerical=True, dtype=None, **kwargs):
+        l_str = super().get(section, option, **kwargs)
+        return parse_list(l_str, is_numerical, dtype)
+
+
+
+    def print(self, section=None, ignore_sections=('program_options','constants'), **kwargs):
+        if ignore_sections is None:
+            ignore_sections = set()
+
+        if section is not None:
+            print_aligned( self._sections[section] )
+        else:
+            sections = set(self.sections()) - set(ignore_sections)
+            for section in sections:
+                print("\n[{}]".format(section))
+                print_aligned( self._sections[section] )
+        print('')
+
+
+
+
+
+
+

@@ -1,5 +1,4 @@
-from configparser import ConfigParser
-from core.setup import parse_expr
+
 
 from numpy import sin, cos, pi, sqrt, sum, floor, ceil, power, log10, exp
 import numpy as np
@@ -7,9 +6,9 @@ from typing import *
 from itertools import product
 import warnings
 
-from utils.complex import sample_gaussian_complex_matrix
+from utils.custom_configparser import CustomConfigParser
 from utils.custom_types import Vector, Matrix2D, Matrix3D, ComplexVector, ComplexArray, Vector3D, Matrix3DCoordinates
-from utils.misc import safe_log10
+from utils.misc import safe_log10, sample_gaussian_complex_matrix
 
 wall_attenuation = None
 
@@ -30,7 +29,7 @@ b_NLOS     = None
 sigma_NLOS = None
 
 
-def initialize_from_config(config: ConfigParser):
+def initialize_from_config(config: CustomConfigParser):
     global f0_LOS, n_LOS, b_LOS, sigma_LOS, f0_NLOS, n_NLOS, b_NLOS, sigma_NLOS, lightspeed, frequency, q, wavelength, k, wall_attenuation
 
     if config.get('setup', 'environment_type') == 'indoor':
@@ -40,23 +39,23 @@ def initialize_from_config(config: ConfigParser):
     else:
         raise ValueError
 
-    f0_LOS     = parse_expr( config.get(section, 'f0_LOS') )
-    n_LOS      = parse_expr( config.get(section, 'n_LOS') )
-    b_LOS      = parse_expr( config.get(section, 'b_LOS') )
-    sigma_LOS  = parse_expr( config.get(section, 'sigma_LOS') )
-    f0_NLOS    = parse_expr( config.get(section, 'f0_NLOS') )
-    n_NLOS     = parse_expr( config.get(section, 'n_NLOS') )
-    b_NLOS     = parse_expr( config.get(section, 'b_NLOS') )
-    sigma_NLOS = parse_expr( config.get(section, 'sigma_NLOS') )
+    f0_LOS     = config.getfloat(section, 'f0_LOS')
+    n_LOS      = config.getfloat(section, 'n_LOS')
+    b_LOS      = config.getfloat(section, 'b_LOS')
+    sigma_LOS  = config.getfloat(section, 'sigma_LOS')
+    f0_NLOS    = config.getfloat(section, 'f0_NLOS')
+    n_NLOS     = config.getfloat(section, 'n_NLOS')
+    b_NLOS     = config.getfloat(section, 'b_NLOS')
+    sigma_NLOS = config.getfloat(section, 'sigma_NLOS')
 
-    lightspeed = parse_expr( config.get('constants', 'speed_of_light') )
-    frequency  = parse_expr( config.get('setup', 'frequency') )
-    q          = parse_expr(config.get('channel_modeling', 'q'))
+    lightspeed = config.getfloat('constants', 'speed_of_light')
+    frequency  = config.getfloat('setup', 'frequency')
+    q          = config.getfloat('channel_modeling', 'q')
 
     wavelength = lightspeed / frequency
     k          = 2 * pi / wavelength
 
-    wall_attenuation = parse_expr(config.get('channel_modeling', 'wall_attenuation'))
+    wall_attenuation = config.getfloat('channel_modeling', 'wall_attenuation')
 
 
 
@@ -341,7 +340,6 @@ def TX_RX_channel_model(TX_RX_distance, wall_exists):
 #
 #
 #     # LOS component: Pathloss in the TX-RX path
-#     # todo: Should that take the RIS into consideration???????
 #     if LOS_component_exists:
 #         L          = calculate_pathloss(TX_RX_distance, isLOS=True)
 #         eta        = np.random.uniform(0, 2 * pi)
@@ -355,118 +353,5 @@ def TX_RX_channel_model(TX_RX_distance, wall_exists):
 
 
 
-def _generate_scatterers_positions(C, Sc, Smax, TX_coordinates, RIS_Coordinates, phi_TX, theta_TX):
-    y_bounds = [np.min(RIS_Coordinates[:, 1])+0.01, np.max(RIS_Coordinates[:, 1])-0.01]
-    x_bounds = [TX_coordinates[0]+0.01, np.min(RIS_Coordinates[:, 0])-0.01]
-    z_bounds = [0, TX_coordinates[2]-0.01]
-
-    bounds = np.array([x_bounds, y_bounds, z_bounds])
-
-    cluster_positions = np.zeros((C, Smax, 3))
-
-    min_TX_RIS_dist = np.min(np.linalg.norm(TX_coordinates - RIS_Coordinates, axis=1))
-
-
-    for c in range(C):
-
-        cluster_centroid_coords = np.random.uniform(low=bounds[:,0], high=bounds[:,1])
-
-        for s in range(Sc[c]):
-
-            rotation_matrix     = [cos(theta_TX[c][s])*cos(phi_TX[c][s]), cos(theta_TX[c][s])*sin(phi_TX[c][s]), sin(theta_TX[c][s])]
-            scatterer_positions = np.array(rotation_matrix) * np.random.rand(3) + cluster_centroid_coords
-            scatterer_positions = np.clip(scatterer_positions, a_min=bounds[:,0], a_max=bounds[:,1])
-
-
-            cluster_positions[c, s, :] = scatterer_positions #[x, y, z]
-
-
-
-    return cluster_positions
-
-
-
-def _calculate_RIS_scatterers_distances_and_angles(C, Sc, Smax, RIS_Coordinates, cluster_positions):
-    num_RIS = RIS_Coordinates.shape[0]
-
-    clusters_RIS_distances = np.zeros((C, Smax, num_RIS))
-    thetas_AoA             = np.zeros((C, Smax, num_RIS))
-    phis_AoA               = np.zeros((C, Smax, num_RIS))
-
-    for r in range(num_RIS):
-
-        x_RIS = RIS_Coordinates[r,0]
-        y_RIS = RIS_Coordinates[r,1]
-        z_RIS = RIS_Coordinates[r,2]
-
-        for c in range(C):
-            for s in range(Sc[c]):
-                x,y,z                         = cluster_positions[c,s,:]
-                b_c_s                         = np.linalg.norm(RIS_Coordinates[r, :] - cluster_positions[c,s,:])
-                clusters_RIS_distances[c,s,r] = b_c_s
-                thetas_AoA[c,s,r]             = np.sign(z - z_RIS) * np.arcsin( np.abs(z_RIS - z) / b_c_s )
-                phis_AoA[c,s,r]               = np.sign(x_RIS - x) * np.arctan( np.abs(x_RIS - x) / np.abs(y_RIS - y) )
-
-    return clusters_RIS_distances, thetas_AoA, phis_AoA
-
-
-
-def calculate_RX_scatterers_distances(Sc, RX_coordinates, cluster_positions):
-    RX_clusters_distances = np.linalg.norm(RX_coordinates[None, None, :] - cluster_positions, axis=2)  # Shape (C, Sc)
-
-    C = len(Sc)
-    Smax = np.max(Sc)
-
-    for c in range(C):
-        for s in range(Sc[c], Smax):
-            RX_clusters_distances[c, s] = 0
-
-    return RX_clusters_distances
-
-
-
-
-
-
-
-
-def generate_clusters(TX_coordinates : Vector3D,
-                      RIS_Coordinates: Matrix3DCoordinates,
-                      lambda_p       : float,
-                      num_clusters=None):
-
-    # assuming TX is on the yz plane and all RIS on the xz plane
-
-    if num_clusters is None:
-        C = np.maximum(2, np.random.poisson(lambda_p))
-    else:
-        C = num_clusters
-
-    Sc            = np.random.randint(1, 30, size=C)
-    Smax          = np.max(Sc)
-
-    print("Generating {} clusters with {} scatterers.".format(C, Sc))
-
-    mean_phi_TX   = np.random.uniform(-pi/2, pi/2, size=C)
-    mean_theta_TX = np.random.uniform(-pi/4, pi/4, size=C)
-
-    phi_TX        = [np.random.laplace(mean_phi_TX[c]  , 5*pi/180, size=Sc[c]) for c in range(C)]
-    theta_TX      = [np.random.laplace(mean_theta_TX[c], 5*pi/180, size=Sc[c]) for c in range(C)]
-
-
-    cluster_positions = _generate_scatterers_positions(C, Sc, Smax, TX_coordinates, RIS_Coordinates, phi_TX, theta_TX)
-
-    TX_clusters_distances = np.linalg.norm(TX_coordinates[None,None,:]-cluster_positions, axis=2) # Shape (C, Sc)
-
-    for c in range(C):
-        for s in range(Sc[c], Smax):
-            TX_clusters_distances[c,s] = 0
-
-
-    clusters_RIS_distances,\
-    thetas_AoA,\
-    phis_AoA = _calculate_RIS_scatterers_distances_and_angles(C, Sc, Smax, RIS_Coordinates, cluster_positions)
-
-    return Sc, cluster_positions, TX_clusters_distances, clusters_RIS_distances, thetas_AoA, phis_AoA
 
 
