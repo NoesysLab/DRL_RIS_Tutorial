@@ -7,6 +7,7 @@ import yaml
 from configparser import ConfigParser
 from collections import OrderedDict
 import json
+import pandas as pd
 
 class SimulationDataset:
     def __init__(self,
@@ -97,13 +98,36 @@ class SimulationDataset:
             self.values.append(row)
 
 
-    def save(self, filename, mode='wb'):
+    def _to_dataframe(self):
+        num_RIS_elements = self.total_RIS_elements // self.num_RIS
+        num_RIS = self.num_RIS
+
+        column_names = ['H_{}_{}_real'.format(i + 1, j + 1) for i in range(num_RIS) for j in range(num_RIS_elements)]
+        column_names += ['H_{}_{}_imag'.format(i + 1, j + 1) for i in range(num_RIS) for j in range(num_RIS_elements)]
+        column_names += ['G_{}_{}_real'.format(i + 1, j + 1) for i in range(num_RIS) for j in range(num_RIS_elements)]
+        column_names += ['G_{}_{}_imag'.format(i + 1, j + 1) for i in range(num_RIS) for j in range(num_RIS_elements)]
+        column_names += ['h_SISO_real', 'h_SISO_imag']
+        column_names += ['RX_x', 'RX_y', 'RX_z']
+        column_names += ['phase_value_{}'.format(i + 1) for i in range(self.total_RIS_configurable_elements)]
+        column_names += ['SNR']
+
+        df = pd.DataFrame(data=self.values, columns=column_names)
+        return df
+
+
+    def save(self, filename, formats=('.npy', '.csv'), mode='wb'):
+        formats = list(formats)
 
         if not isinstance(self.values, np.ndarray):
             self.values = np.array(self.values)
 
-        with open(filename, mode=mode) as fout:
-            np.save(fout, self.values, allow_pickle=True)
+        if '.npy' in formats:
+            with open(filename+'.npy', mode=mode) as fout:
+                np.save(fout, self.values, allow_pickle=True)
+
+        if '.csv' in formats:
+            df = self._to_dataframe()
+            df.to_csv(filename+'.csv', index=False)
 
 
 

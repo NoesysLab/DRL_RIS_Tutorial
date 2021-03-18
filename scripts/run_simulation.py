@@ -87,6 +87,9 @@ if verbosity >= 2:
 
 
 for i in iterator:
+    if config.getint('program_options', 'stop_after_evaluations') is not None:
+        if i>= config.getint('program_options', 'stop_after_evaluations'):
+            break
     H                     = calculate_H(RIS_list, TX_coordinates, Sc, TX_clusters_distances,
                                         clusters_RIS_distances, thetas_AoA, phis_AoA)
     RX_clusters_distances = calculate_RX_scatterers_distances(Sc, center_RX_position, cluster_positions)
@@ -102,7 +105,9 @@ for i in iterator:
 
 
 
-dataset.save(dataSaver.get_save_filename(config.get('program_options', 'output_file_name')))
+
+dataset.save(dataSaver.get_save_filename(config.get('program_options', 'output_file_name')),
+             formats=config.getlist('program_options', 'output_extensions', is_numerical=False))
 
 
 
