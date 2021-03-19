@@ -29,6 +29,7 @@ b_NLOS     = None
 sigma_NLOS = None
 
 
+
 def initialize_from_config(config: CustomConfigParser):
     global f0_LOS, n_LOS, b_LOS, sigma_LOS, f0_NLOS, n_NLOS, b_NLOS, sigma_NLOS, lightspeed, frequency, q, wavelength, k, wall_attenuation
 
@@ -56,6 +57,17 @@ def initialize_from_config(config: CustomConfigParser):
     k          = 2 * pi / wavelength
 
     wall_attenuation = config.getfloat('channel_modeling', 'wall_attenuation')
+
+
+
+
+def compute_SNR(H:np.ndarray, G: np.ndarray, Phi: np.ndarray, h0: np.ndarray, noise_power: float)->np.ndarray:
+    complete_channel_coefficients = G @ Phi @ H
+    complete_channel_coefficients += h0
+    snr = np.power(np.absolute(complete_channel_coefficients), 2) / noise_power
+    return snr
+
+
 
 
 

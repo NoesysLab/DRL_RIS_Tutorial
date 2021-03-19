@@ -175,18 +175,32 @@ def print_aligned(dict_: Dict):
 
 class CustomConfigParser(configparser.ConfigParser):
 
+    def get(self, section: str, option: str, **kwargs) -> str:
+        try:
+            return super().get(section, option, **kwargs)
+        except configparser.NoOptionError:
+            return None
+
     def getfloat(self, section: str, option: str, **kwargs) -> float:
-        f_str = super().get(section, option, **kwargs)
-        return parse_expr(f_str, dtype=float)
+        try:
+            f_str = super().get(section, option, **kwargs)
+            return parse_expr(f_str, dtype=float)
+        except configparser.NoOptionError:
+            return None
 
     def getint(self, section: str, option: str, **kwargs) -> int:
-        i_str = super().get(section, option, **kwargs)
-        return parse_expr(i_str, dtype=int)
+        try:
+            i_str = super().get(section, option, **kwargs)
+            return parse_expr(i_str, dtype=int)
+        except configparser.NoOptionError:
+            return None
 
     def getlist(self,section: str, option: str, is_numerical=True, dtype=None, **kwargs):
-        l_str = super().get(section, option, **kwargs)
-        return parse_list(l_str, is_numerical, dtype)
-
+        try:
+            l_str = super().get(section, option, **kwargs)
+            return parse_list(l_str, is_numerical, dtype)
+        except configparser.NoOptionError:
+            return None
 
 
     def print(self, section=None, ignore_sections=('program_options','constants'), **kwargs):

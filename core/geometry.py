@@ -141,6 +141,8 @@ def from_ascii(ascii_grid: str,
 def get_random_2D_positions_on_square(num_positions: int, xy_center: Tuple[float,float], width: float, z_value:Union[float,Iterable]=None)->Matrix3DCoordinates:
     positions        = np.empty(shape=(num_positions, 3))
     positions[:,0:2] = np.random.random((num_positions, 2))
+    positions       *= width
+    positions       += np.array([xy_center[0], xy_center[1], 0])
     positions[:,2]   = z_value
     return positions
 

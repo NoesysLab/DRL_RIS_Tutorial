@@ -2,6 +2,9 @@ from datetime import datetime
 import sys
 import numpy as np
 from tqdm import tqdm
+import random
+import matplotlib.pyplot as plt
+
 
 from core.setup import load_config_from_file, create_setup_from_config
 from core.simulation import exhaustive_search, calculate_H, calculate_G_and_h0, generate_clusters, calculate_RX_scatterers_distances, initialize_from_config
@@ -29,9 +32,15 @@ config    = load_config_from_file(configuration_filename)
 dataSaver = DataSaver(SETUP, config.get('program_options', 'output_directory_root')).set_configuration(config)
 
 
-batch_size = config.getint('program_options', 'batch_size')
-verbosity  = config.getint('program_options', 'verbosity_level')
+batch_size      = config.getint('program_options', 'batch_size')
+verbosity       = config.getint('program_options', 'verbosity_level')
+seed            = config.getint('program_options', 'random_seed')
+stop_iterations = config.getint('program_options', 'stop_after_evaluations')
 
+
+if seed:
+    np.random.seed(seed)
+    random.seed(seed)
 
 
 [RIS_list,
@@ -46,6 +55,7 @@ verbosity  = config.getint('program_options', 'verbosity_level')
  transmit_power,
  noise_power,
  center_RX_position              ] = create_setup_from_config(config)
+
 
 [Sc,
  cluster_positions,
@@ -87,12 +97,10 @@ if verbosity >= 2:
 
 
 for i in iterator:
-    if config.getint('program_options', 'stop_after_evaluations') is not None:
-        if i>= config.getint('program_options', 'stop_after_evaluations'):
-            break
+    if stop_iterations is not None and i>= stop_iterations: break
+
     H                     = calculate_H(RIS_list, TX_coordinates, Sc, TX_clusters_distances,
                                         clusters_RIS_distances, thetas_AoA, phis_AoA)
-    RX_clusters_distances = calculate_RX_scatterers_distances(Sc, center_RX_position, cluster_positions)
     G, h0                 = calculate_G_and_h0(RIS_list, TX_coordinates, RX_locations[i, :])
     configuration, snr    = exhaustive_search(RIS_list, H, G, h0, noise_power, batch_size=batch_size, show_progress_bar=False)
 

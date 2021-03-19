@@ -64,8 +64,7 @@ def exhaustive_search(ris_list: List[RIS],
         batch_phases                   = np.repeat(batch_phases, repeats=dependent_elements_per_RIS, axis=1)
         Phi                            = diag_per_row(batch_phases)
 
-        complete_channel_coefficients  = G @ Phi @ H + h0
-        batch_snrs                     = np.power(np.absolute(complete_channel_coefficients), 2) / noise_power
+        batch_snrs                     = channels.compute_SNR(H, G, Phi, h0, noise_power)
         batch_snrs                     = batch_snrs.flatten()
 
         best_batch_configuration_index = np.argmax(batch_snrs)

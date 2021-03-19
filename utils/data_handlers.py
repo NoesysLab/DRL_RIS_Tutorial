@@ -46,6 +46,15 @@ class SimulationDataset:
         self.array_columns = array_columns
 
 
+    @property
+    def shape(self):
+        self.values = np.array(self.values)
+        return self.values.shape
+
+    @property
+    def size(self):
+        self.values = np.array(self.values)
+        return self.values.size
 
     def check_sizes(self, H, G, h, RX_position, best_configuration, best_SNR):
         sizes_ok = len(H) == self.total_RIS_elements and len(G) == self.total_RIS_elements
@@ -137,6 +146,7 @@ class SimulationDataset:
             print('Loaded array of shape: {}'.format(self.values.shape))
             if self.values.shape[1] != self.array_columns:
                 raise ValueError
+        return self
 
     def get(self, column_name:str):
         if column_name not in {'H', 'G', 'h', 'RX_position', 'best_configuration', 'best_SNR'}:
@@ -171,8 +181,12 @@ class SimulationDataset:
             assert False
 
 
-        if column_name in ['H','G', 'h']:
+        if column_name in ['H','G']:
             out = out[:,0:K] + 1j * out[:,K:]
+
+        elif column_name == 'h':
+            out = out[:, 0] + 1j * out[:, 1]
+
 
         return out
 
