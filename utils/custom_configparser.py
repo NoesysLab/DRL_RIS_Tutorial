@@ -191,7 +191,10 @@ class CustomConfigParser(configparser.ConfigParser):
     def getint(self, section: str, option: str, **kwargs) -> int:
         try:
             i_str = super().get(section, option, **kwargs)
-            return parse_expr(i_str, dtype=int)
+            if i_str == '':
+                return None
+            else:
+                return parse_expr(i_str, dtype=int)
         except configparser.NoOptionError:
             return None
 

@@ -131,3 +131,10 @@ def safe_log10(A: np.ndarray)->np.ndarray:
 
 def sample_gaussian_complex_matrix(shape: Tuple):
     return  np.random.randn(*shape) + 1j * np.random.randn(*shape)
+
+
+def dBm_to_Watt(val_dBm):
+    return np.power(10, (val_dBm/10 - 3)  )
+
+def dBW_to_Watt(val_dBW):
+    return np.power(10, val_dBW/10)

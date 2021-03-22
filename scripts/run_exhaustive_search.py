@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 from core.setup import load_config_from_file, create_setup_from_config
 from core.simulation import exhaustive_search, calculate_H, calculate_G_and_h0, generate_clusters, calculate_RX_scatterers_distances, initialize_from_config
 from utils.data_handlers import SimulationDataset, DataSaver
+from utils.misc import dBm_to_Watt
 from utils.plotting import plot_simulation
 
 start_t = datetime.now()
@@ -56,6 +57,9 @@ if seed:
  noise_power,
  center_RX_position              ] = create_setup_from_config(config)
 
+
+
+noise_power = dBm_to_Watt(noise_power)
 
 [Sc,
  cluster_positions,

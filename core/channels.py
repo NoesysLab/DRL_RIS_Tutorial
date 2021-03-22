@@ -8,7 +8,7 @@ import warnings
 
 from utils.custom_configparser import CustomConfigParser
 from utils.custom_types import Vector, Matrix2D, Matrix3D, ComplexVector, ComplexArray, Vector3D, Matrix3DCoordinates
-from utils.misc import safe_log10, sample_gaussian_complex_matrix
+from utils.misc import safe_log10, sample_gaussian_complex_matrix, dBW_to_Watt
 
 wall_attenuation = None
 
@@ -75,7 +75,7 @@ def calculate_pathloss(total_distance: Union[float, np.ndarray], isLOS: bool, wa
     """
 
     Calculate the attenuation of an outdoor link using the 5G path loss model (the close-in free space reference distance
-    model with frequency-dependent path loss exponent). Using equation (5) from [Basar 2020]. Output in dB.
+    model with frequency-dependent path loss exponent). Using equation (5) from [Basar 2020]. OUTPUT IN WATT.
 
     :param total_distance: The distance(s) of the total path between the two endpoints of the link. Can be either a numpy array or a float. Note for scattered paths that the total length of the arc is expected.
     :param isLOS: Whether the link is Line of Sight or not
@@ -114,6 +114,9 @@ def calculate_pathloss(total_distance: Union[float, np.ndarray], isLOS: bool, wa
 
     if wallExists:
         pathloss += wall_attenuation
+
+
+    #pathloss = dBW_to_Watt(pathloss)
 
     return pathloss
 
