@@ -44,6 +44,10 @@ if seed:
     random.seed(seed)
 
 
+initialize_from_config(config)
+
+
+
 [RIS_list,
  RX_locations,
  TX_coordinates,
@@ -59,6 +63,9 @@ if seed:
 
 
 
+
+
+
 noise_power = dBm_to_Watt(noise_power)
 
 [Sc,
@@ -70,7 +77,6 @@ noise_power = dBm_to_Watt(noise_power)
                                                         RIS_coordinates,
                                                         lambda_p,
                                                         num_clusters)
-initialize_from_config(config)
 
 
 if verbosity >= 1:

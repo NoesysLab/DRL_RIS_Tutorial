@@ -19,9 +19,16 @@ from utils.misc import ray_to_elevation_azimuth, diag_per_row
 
 
 
+rng = None
+
 def initialize_from_config(config: CustomConfigParser):
     channels.initialize_from_config(config)
-
+    global rng
+    seed = config.getint('program_options', 'random_seed')
+    if seed is not None:
+        rng = np.random.RandomState(seed)
+    else:
+        rng = np.random.RandomState()
 
 
 
@@ -182,12 +189,12 @@ def _generate_scatterers_positions(C, Sc, Smax, TX_coordinates, RIS_Coordinates,
 
     for c in range(C):
 
-        cluster_centroid_coords = np.random.uniform(low=bounds[:,0], high=bounds[:,1])
+        cluster_centroid_coords = rng.uniform(low=bounds[:,0], high=bounds[:,1])
 
         for s in range(Sc[c]):
 
             rotation_matrix     = [cos(theta_TX[c][s])*cos(phi_TX[c][s]), cos(theta_TX[c][s])*sin(phi_TX[c][s]), sin(theta_TX[c][s])]
-            scatterer_positions = np.array(rotation_matrix) * np.random.rand(3) + cluster_centroid_coords
+            scatterer_positions = np.array(rotation_matrix) * rng.rand(3) + cluster_centroid_coords
             scatterer_positions = np.clip(scatterer_positions, a_min=bounds[:,0], a_max=bounds[:,1])
 
 
@@ -251,19 +258,19 @@ def generate_clusters(TX_coordinates : Vector3D,
     # assuming TX is on the yz plane and all RIS on the xz plane
 
     if num_clusters is None:
-        C = np.maximum(2, np.random.poisson(lambda_p))
+        C = np.maximum(2, rng.poisson(lambda_p))
     else:
         C = num_clusters
 
-    Sc            = np.random.randint(1, 30, size=C)
+    Sc            = rng.randint(1, 30, size=C)
     Smax          = np.max(Sc)
 
 
-    mean_phi_TX   = np.random.uniform(-pi/2, pi/2, size=C)
-    mean_theta_TX = np.random.uniform(-pi/4, pi/4, size=C)
+    mean_phi_TX   = rng.uniform(-pi/2, pi/2, size=C)
+    mean_theta_TX = rng.uniform(-pi/4, pi/4, size=C)
 
-    phi_TX        = [np.random.laplace(mean_phi_TX[c]  , 5*pi/180, size=Sc[c]) for c in range(C)]
-    theta_TX      = [np.random.laplace(mean_theta_TX[c], 5*pi/180, size=Sc[c]) for c in range(C)]
+    phi_TX        = [rng.laplace(mean_phi_TX[c]  , 5*pi/180, size=Sc[c]) for c in range(C)]
+    theta_TX      = [rng.laplace(mean_theta_TX[c], 5*pi/180, size=Sc[c]) for c in range(C)]
 
 
     cluster_positions = _generate_scatterers_positions(C, Sc, Smax, TX_coordinates, RIS_Coordinates, phi_TX, theta_TX)
