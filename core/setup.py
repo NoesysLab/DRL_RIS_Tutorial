@@ -88,7 +88,7 @@ def create_setup_from_config(config: CustomConfigParser):
                   element_dimensions=element_dimensions,
                   in_group_spacing=element_gap,
                   between_group_spacing=element_gap,
-                  phase_space=('discrete', {'values': RIS_phase_values}),
+                  phase_space=('discrete', {'values': np.exp(1j*RIS_phase_values)}),
                   id_=i)
 
         ris.set_random_state()

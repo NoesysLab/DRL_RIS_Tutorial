@@ -47,6 +47,8 @@ if seed:
     random.seed(seed)
 
 
+initialize_from_config(config)
+
 [RIS_list,
  RX_locations,
  TX_coordinates,
@@ -71,7 +73,7 @@ if seed:
                                                         num_clusters)
 
 
-initialize_from_config(config)
+
 
 
 

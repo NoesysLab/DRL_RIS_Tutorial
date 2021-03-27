@@ -46,6 +46,8 @@ if seed:
     random.seed(seed)
 
 
+initialize_from_config(config)
+
 [RIS_list,
  RX_locations,
  TX_coordinates,
@@ -75,7 +77,7 @@ ris = RIS_list[0] # type: RIS
 
 
 
-initialize_from_config(config)
+
 
 
 
@@ -141,6 +143,16 @@ elif '--compare' in sys.argv:
     #df_phases['SNR'] = dataset.get('best_SNR')
 
 
+
+    for i in range(total_RIS_controllable_elements):
+        print("Average phase for element {:2d}: {:.2f} ± {:.2f}".format(i,
+                                                                      dataset.get('best_configuration')[:,i].mean(),
+                                                                      dataset.get('best_configuration')[:,i].std(),))
+
+    fig = plt.figure(figsize=(10, 7))
+
+    bp = plt.boxplot(dataset.get('best_configuration'), showmeans=True)
+
     plt.figure()
     sns.histplot(dataset.get('best_SNR'), kde=True, stat='probability', bins=40)
     plt.show()
@@ -149,15 +161,57 @@ elif '--compare' in sys.argv:
     plt.imshow(np.transpose(df_phases.values))
     plt.show()
 
+    # plt.figure()
+    # plt.imshow(np.random.binomial(n=1, p=0.5, size=(16,100)))
+    # plt.show()
+    #
+    # plt.figure()
+    # plt.imshow(np.random.binomial(n=1, p=0.5, size=(16, 100)))
+    # plt.show()
+
 
     # plt.figure()
     # df_phases.sum().plot.bar()
     # plt.show()
 
+    import plotly.graph_objects as go
 
+    fig = go.Figure(data=
+    go.Parcoords(
+        line=dict(color=dataset.get('best_SNR'),
+                  colorscale='Electric',
+                  showscale=True,
+                  autocolorscale=True,
+                  ),
+        dimensions=list([
+                    dict(range=[0, 1],
+                        #constraintrange=[0, 1],
+                        #label='{}'.format(i+1),
+                        values=dataset.get('best_configuration')[:,i])
+            for i in range(total_RIS_controllable_elements)
 
+            ] +
+            [    dict(range=[dataset.get('best_SNR').min(), dataset.get('best_SNR').max()],
+                 label='SNR', values=dataset.get('best_SNR')),
+            ]),
+    )
+    )
 
+    import dash
+    import dash_core_components as dcc
+    import dash_html_components as html
+    import subprocess
 
+    result = subprocess.run(['hostname', '-I'], stdout=subprocess.PIPE)
+    local_ip = result.stdout.decode('UTF8').split(' ')[0]
 
+    # fig.layout.height = 1000
+
+    app = dash.Dash()
+    app.layout = html.Div([
+        dcc.Graph(figure=fig, style={'height': '100vh'})
+    ])
+
+    app.run_server(host=local_ip, port=34533, debug=True, use_reloader=False)
 
 

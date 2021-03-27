@@ -71,7 +71,7 @@ def compute_SNR(H:np.ndarray, G: np.ndarray, Phi: np.ndarray, h0: np.ndarray, no
 
 
 
-def calculate_pathloss(total_distance: Union[float, np.ndarray], isLOS: bool, wallExists=False)->Union[np.ndarray, float]:
+def calculate_pathloss(total_distance: Union[float, np.ndarray], isLOS: bool, wallExists=False, ignore_shadow_factor=False)->Union[np.ndarray, float]:
     """
 
     Calculate the attenuation of an outdoor link using the 5G path loss model (the close-in free space reference distance
@@ -95,15 +95,20 @@ def calculate_pathloss(total_distance: Union[float, np.ndarray], isLOS: bool, wa
         b     = b_NLOS
 
 
-    shape = total_distance.shape if isinstance(total_distance, np.ndarray) else [1]                                     # A trick for the code to work both for arrays and scalar distance
 
-    X_sigma  = sigma * np.random.rand(*shape)                                                                           # Shadow fading term in logarithmic units
+
+
     if b != 0:
         frequency_dependent_term = b *( frequency - f0) / f0
     else:
         frequency_dependent_term = 0
 
-    pathloss = -20*log10(4*pi/wavelength) - 10*n * (1 + frequency_dependent_term) * safe_log10(total_distance) - X_sigma    # Equation (5)
+    pathloss = -20*log10(4*pi/wavelength) - 10*n * (1 + frequency_dependent_term) * safe_log10(total_distance)    # Equation (5)
+    if not ignore_shadow_factor:
+        shape   = total_distance.shape if isinstance(total_distance, np.ndarray) else [1]  # A trick for the code to work both for arrays and scalar distance
+        X_sigma = sigma * np.random.rand(*shape)  # Shadow fading term in logarithmic units
+        pathloss -= X_sigma
+
 
 
     pathloss = -pathloss
