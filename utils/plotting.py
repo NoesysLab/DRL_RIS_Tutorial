@@ -7,7 +7,8 @@ from matplotlib.lines import Line2D
 from matplotlib.collections import PatchCollection
 from matplotlib.markers import MarkerStyle
 from matplotlib.patches import Rectangle
-
+from matplotlib import cm
+from scipy.interpolate import griddata
 
 from core.geometry import *
 from core.surfaces import *
@@ -322,6 +323,31 @@ def plot_simulation(RIS_list, cluster_positions, TX_coordinates, center_RX_posit
 
 
 
+
+
+def coordinates_heatmap(Xs, Ys, color, cbar_label=None, title=None, x_label='x', y_label='y', smooth=False):
+    interpolate = 'linear' if smooth == True else 'nearest'
+    gridsize = Xs.shape[0]
+    x_min = Xs.min()
+    x_max = Xs.max()
+    y_min = Ys.min()
+    y_max = Ys.max()
+    xx = np.linspace(x_min, x_max, gridsize)
+    yy = np.linspace(y_min, y_max, gridsize)
+    grid = np.array(np.meshgrid(xx, yy.T))
+    grid = grid.reshape(2, grid.shape[1] * grid.shape[2]).T
+    points = np.array([Xs, Ys]).T  # because griddata wants it that way
+    z_grid2 = griddata(points, color, grid, method=interpolate)
+    # you get a 1D vector as result. Reshape to picture format!
+    z_grid2 = z_grid2.reshape(xx.shape[0], yy.shape[0])
+    fig, ax1 = plt.subplots()
+    sc = ax1.imshow(z_grid2, extent=[x_min, x_max, y_min, y_max, ],
+                    origin='lower', cmap=cm.magma)
+    cbar = plt.colorbar(sc)
+    if cbar_label: cbar.ax.set_ylabel(cbar_label, rotation=90)
+    if title: plt.title(title)
+    if x_label: ax1.set_xlabel(x_label)
+    if y_label: ax1.set_ylabel(y_label)
 
 
 if __name__ == '__main__':
