@@ -1,6 +1,6 @@
 import numpy as np
 
-from core.setup import Setup, initialize_simulation_from_setup
+from deprecated.setup import Setup, initialize_simulation_from_setup
 from deprecated.channels import Channel
 from deprecated import exhaustive_snr_search
 

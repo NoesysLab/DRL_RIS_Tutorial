@@ -1,11 +1,7 @@
-import numpy as np
 import pandas as pd
 
-from core.setup import load_config_from_file, create_setup_from_config
+from deprecated.setup import load_config_from_file, create_setup_from_config
 from utils.data_handlers import SimulationDataset
-from utils.custom_configparser import CustomConfigParser
-
-
 
 config = load_config_from_file('setups/setup1.ini')
 
