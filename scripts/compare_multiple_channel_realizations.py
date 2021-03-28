@@ -15,7 +15,7 @@ if len(sys.argv) < 2: raise RuntimeError("Expected setup configuration filename 
 configuration_filename = sys.argv[1]
 sim                    = Simulator(configuration_filename)
 dataset                = SimulationDataset(sim.num_RIS, sim.total_RIS_elements, sim.total_RIS_controllable_elements)
-dataSaver              = DataSaver(sim.setup_name)
+dataSaver              = DataSaver(sim.setup_name, './data/simulations/').set_configuration(sim.config)
 output_file            = dataSaver.get_save_filename('single_RX_position_many_realizations')
 
 
@@ -24,13 +24,19 @@ output_file            = dataSaver.get_save_filename('single_RX_position_many_re
 if '--generate' in sys.argv:
 
 
+    H_prev, G_prev, h0_prev = None, None, None
+
     for i in tqdm(range(10)):
 
-        H, G, h0           = sim.simulate_transmission(sim.RX_locations[i, :])
+        H, G, h0           = sim.simulate_transmission(sim.center_RX_position)
         configuration, snr = sim.find_best_configuration(H, G, h0)
 
         if sim.verbosity >= 3:
             tqdm.write("Best configuration: {} | SNR: {}".format(configuration, snr))
+
+
+
+        H_prev, G_prev, h0_prev = np.copy(H), np.copy(G), np.copy(h0)
 
         dataset.add_datapoint(H, G, h0, sim.RX_locations[i, :], configuration, snr)
 

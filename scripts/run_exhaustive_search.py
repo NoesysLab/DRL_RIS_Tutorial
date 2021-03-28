@@ -16,7 +16,7 @@ start_t = datetime.now()
 configuration_filename = sys.argv[1]
 sim                    = Simulator(configuration_filename)
 dataset                = SimulationDataset(sim.num_RIS, sim.total_RIS_elements, sim.total_RIS_controllable_elements)
-dataSaver              = DataSaver(sim.setup_name)
+dataSaver              = DataSaver(sim.setup_name, save_dir='./data/simulations').set_configuration(sim.config)
 
 
 

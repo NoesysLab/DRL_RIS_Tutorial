@@ -8,6 +8,7 @@ from typing import List, Tuple
 
 import random
 
+
 from core.surfaces import RIS
 import core.channels as channels
 from core.channels import RIS_RX_channel_model, TX_RIS_channel_model, TX_RX_channel_model
@@ -139,7 +140,7 @@ def exhaustive_search(ris_list: List[RIS],
     num_batches_required          = int(np.ceil(num_transmissions / batch_size))
     last_batch_size               = batch_size if num_transmissions % batch_size == 0 else num_transmissions % batch_size
     possible_configurations       = BinaryEnumerator(batch_size, total_tunable_elements)
-    best_batch_results            = np.empty(shape=(num_batches_required,), dtype=object)
+    best_batch_results            = np.empty(shape=(num_batches_required,total_tunable_elements), dtype=int)
     best_batch_snrs               = np.empty(shape=(num_batches_required,))
     batch_indices                 = range(num_batches_required)
 
@@ -161,7 +162,7 @@ def exhaustive_search(ris_list: List[RIS],
         best_batch_configuration_index = np.argmax(batch_snrs)
         best_batch_snr                 = batch_snrs[best_batch_configuration_index]
         best_configuration             = batch_configurations[best_batch_configuration_index]
-        best_batch_results[i]          = best_configuration
+        best_batch_results[i,:]        = best_configuration
         best_batch_snrs[i]             = best_batch_snr
 
 
