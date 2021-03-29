@@ -1,25 +1,27 @@
 import numpy as np
 from numpy import pi, cos, sin
 from tqdm import tqdm
-from datetime import datetime
-import matplotlib.pyplot as plt
-
+import itertools
 from typing import List, Tuple
 
 import random
-
 
 from core.surfaces import RIS
 import core.channels as channels
 from core.channels import RIS_RX_channel_model, TX_RIS_channel_model, TX_RX_channel_model
 
 
-from utils.binary_space import BinaryEnumerator
+#from utils.binary_space import BinaryEnumerator
 from utils.custom_configparser import CustomConfigParser
 from utils.custom_types import Vector3D, Matrix3DCoordinates
 from utils.misc import ray_to_elevation_azimuth, diag_per_row, dBm_to_Watt
 
 import configparser
+
+
+
+import numba
+
 
 
 from core.geometry import get_receiver_positions
@@ -122,56 +124,167 @@ def create_setup_from_config(config: CustomConfigParser):
 
 
 
-def exhaustive_search(ris_list: List[RIS],
-                      H,
+
+
+
+@numba.njit
+def nb_block(X):
+    xtmp1 = np.concatenate(X[0], axis=1)
+    xtmp2 = np.concatenate(X[1], axis=1)
+    return np.concatenate((xtmp1, xtmp2), axis=0)
+
+
+@numba.njit
+def nb_block2(X):
+    xtmp1 = np.hstack(X[0])
+    xtmp2 = np.hstack(X[1])
+    return np.vstack((xtmp1, xtmp2))
+
+
+@numba.jitclass([
+    ('B', numba.int8[:,:]),
+    ('k', numba.int64),
+    ('num_digits', numba.int64),
+    ('max_number', numba.float64),
+    ('curr_padding', numba.int64),
+    ('_curr_num', numba.int64),
+])
+class BinaryEnumerator:
+
+
+    def __init__(self, num_digits):
+        self.B            = np.array([[0],[1]], dtype=np.byte)
+        self.k            = 1
+        self.num_digits   = num_digits
+        self.max_number   = np.power(2, num_digits)-1
+        self.curr_padding = self.num_digits - self.k
+
+        self._curr_num   = 0
+
+
+    def _expand_array(self):
+
+        self.B = nb_block2(((np.zeros((2 ** self.k, 1), dtype=np.byte), self.B),
+                           (np.ones((2 ** self.k, 1), dtype=np.byte), self.B)))
+
+        self.k += 1
+        self.curr_padding = self.num_digits - self.k
+
+
+    # def __iter__(self):
+    #     self._curr_num = 0
+    #     return self
+
+
+    def next(self):
+        if self._curr_num > self.max_number:
+            raise StopIteration
+
+
+        if self._curr_num + 1 > np.power(2, self.k):
+            self._expand_array()
+
+
+        num = self.B[self._curr_num, :]
+        self._curr_num += 1
+
+
+        if self.curr_padding>0:
+            num = np.concatenate( ( np.zeros(self.curr_padding, dtype=np.byte), num ) )
+
+        return num
+
+
+
+
+
+@numba.vectorize(nopython=True)
+def to_complex(x):
+    return x+0j
+
+
+
+
+
+@numba.vectorize(nopython=True)
+def configuration_to_phase_shifts_simple(elem):
+    return (2 - 2 * elem) - 1
+
+
+
+
+@numba.guvectorize([(numba.int64[:], numba.complex128[:], numba.complex128[:])], '(n),(m)->(n)',nopython=True)
+def configuration_to_phase_shifts(configuration, phase_values, phase):
+    for i in range(configuration.shape[0]):
+        phase[i] = phase_values[configuration[i]]
+
+
+
+
+@numba.njit
+def calculate_phase_shifts(configuration, phase_values):
+    map_states_to_phase_shifts = np.vectorize(lambda s: phase_values[s])
+    return map_states_to_phase_shifts(configuration)
+
+
+@numba.njit
+def exhaustive_search(H,
                       G,
                       h0,
                       noise_power,
-                      batch_size=2**11,
-                      show_progress_bar=False)->Tuple[np.ndarray, float]:
+                      total_tunable_elements,
+                      total_dependent_elements,
+                      num_discrete_states,
+                      phase_values,
 
-    total_tunable_elements        = sum([ris.num_tunable_elements for ris in ris_list])
-    dependent_elements_per_RIS    = ris_list[0].num_dependent_elements
-    discrete_states               = range(ris_list[0].state_space.num_values)
-    phase_space                   = ris_list[0].phase_space
-    combined_state_space_elements = int(len(discrete_states)) ** int(total_tunable_elements)
-    num_transmissions             = combined_state_space_elements
-    K                             = sum([ris.total_elements for ris in ris_list])
-    num_batches_required          = int(np.ceil(num_transmissions / batch_size))
-    last_batch_size               = batch_size if num_transmissions % batch_size == 0 else num_transmissions % batch_size
-    possible_configurations       = BinaryEnumerator(batch_size, total_tunable_elements)
-    best_batch_results            = np.empty(shape=(num_batches_required,total_tunable_elements), dtype=int)
-    best_batch_snrs               = np.empty(shape=(num_batches_required,))
-    batch_indices                 = range(num_batches_required)
-
-    if show_progress_bar:
-        batch_indices = tqdm(batch_indices, leave=True)
+                      )->Tuple[np.ndarray, float]:
 
 
-    for i in batch_indices:
-
-        batch_transmissions            = batch_size if i != num_batches_required-1 else last_batch_size
-        batch_configurations           = next(possible_configurations)
-        batch_phases                   = phase_space.calculate_phase_shifts(batch_configurations)
-        batch_phases                   = np.repeat(batch_phases, repeats=dependent_elements_per_RIS, axis=1)
-        Phi                            = diag_per_row(batch_phases)
-
-        batch_snrs                     = channels.compute_SNR(H, G, Phi, h0, noise_power)
-        batch_snrs                     = batch_snrs.flatten()
-
-        best_batch_configuration_index = np.argmax(batch_snrs)
-        best_batch_snr                 = batch_snrs[best_batch_configuration_index]
-        best_configuration             = batch_configurations[best_batch_configuration_index]
-        best_batch_results[i,:]        = best_configuration
-        best_batch_snrs[i]             = best_batch_snr
 
 
-    best_snr_index_from_batches        = int(np.argmax(best_batch_snrs))
-    total_best_configuration           = best_batch_results[best_snr_index_from_batches]
-    total_best_snr                     = best_batch_snrs[best_snr_index_from_batches]
 
 
-    return total_best_configuration, total_best_snr
+
+    assert num_discrete_states == 2
+
+    phase_values2              = to_complex(phase_values)
+    #map_states_to_phase_shifts = np.vectorize(lambda s: phase_values2[s])
+
+    configurations_iterator = BinaryEnumerator(total_tunable_elements)
+    num_configurations      = int(2**num_discrete_states)
+
+    best_snr                = 0.
+    best_configuration      = np.zeros(num_discrete_states, dtype=np.byte)
+
+
+
+    i = 0
+    while i < num_configurations:
+
+        configuration                  = configurations_iterator.next()
+        #phase                          = configuration_to_phase_shifts(configuration, phase_values2)
+        #phase                          = calculate_phase_shifts(configuration, phase_values2)
+        #phase                          = map_states_to_phase_shifts(configuration)
+        phase                          = configuration_to_phase_shifts_simple(configuration)
+        Phi                            = np.repeat(phase, repeats=total_dependent_elements)
+        Phi2                           = to_complex(Phi).flatten()
+        prod                           = (G.T*H).flatten()
+        channel_reflected              = (np.dot(prod, Phi2) + h0)[0,0]
+        channel_mag                    = np.power( np.absolute(channel_reflected), 2)
+        snr                            = channel_mag / noise_power
+
+
+        if snr > best_snr:
+            best_snr           = snr
+            best_configuration = configuration
+
+
+        i += 1
+
+    #best_configuration = np.array(best_configuration)
+
+
+    return best_configuration, best_snr
 
 
 
@@ -291,8 +404,21 @@ class Simulator:
 
     def find_best_configuration(self, H: np.ndarray, G: np.ndarray, h0=None):
         if h0 is None: h0 = 0.
-        return exhaustive_search(self.RIS_list, H, G, h0, self.noise_power, self.batch_size)
 
+        #return exhaustive_search(self.RIS_list, H, G, h0, self.noise_power, self.batch_size)
+
+
+        total_dependent_elements = self.total_RIS_elements // self.total_RIS_controllable_elements
+
+
+
+        return exhaustive_search(H, G, h0,
+                                 self.noise_power,
+                                 self.total_RIS_controllable_elements,
+                                 total_dependent_elements,
+                                 len(self.RIS_list[0].phase_space.values),
+                                 self.RIS_list[0].phase_space.values
+                                 )
 
 
 
