@@ -206,83 +206,39 @@ def to_complex(x):
 
 
 
-@numba.vectorize(nopython=True)
-def configuration_to_phase_shifts_simple(elem):
-    return (2 - 2 * elem) - 1
 
-
-
-
-@numba.guvectorize([(numba.int64[:], numba.complex128[:], numba.complex128[:])], '(n),(m)->(n)',nopython=True)
-def configuration_to_phase_shifts(configuration, phase_values, phase):
-    for i in range(configuration.shape[0]):
-        phase[i] = phase_values[configuration[i]]
-
-
-
-
-@numba.njit
-def calculate_phase_shifts(configuration, phase_values):
-    map_states_to_phase_shifts = np.vectorize(lambda s: phase_values[s])
-    return map_states_to_phase_shifts(configuration)
-
-
-@numba.njit
-def exhaustive_search(H,
-                      G,
-                      h0,
-                      noise_power,
+@numba.njit(fastmath=True)
+def exhaustive_search(H, G, h0, noise_power,
                       total_tunable_elements,
                       total_dependent_elements,
-                      num_discrete_states,
-                      phase_values,
+                      phase_values, )->Tuple[np.ndarray, float]:
 
-                      )->Tuple[np.ndarray, float]:
-
-
-
-
-
-
-
-    assert num_discrete_states == 2
-
-    phase_values2              = to_complex(phase_values)
-    #map_states_to_phase_shifts = np.vectorize(lambda s: phase_values2[s])
-
+    num_discrete_states     = len(phase_values)
     configurations_iterator = BinaryEnumerator(total_tunable_elements)
-    num_configurations      = int(2**num_discrete_states)
+    num_configurations      = int(2**total_tunable_elements)
 
     best_snr                = 0.
     best_configuration      = np.zeros(num_discrete_states, dtype=np.byte)
 
 
+    assert num_discrete_states == 2, 'Currently supporting only two discrete states due to custom enumeration of the configuration/phase space.'
 
-    i = 0
-    while i < num_configurations:
 
-        configuration                  = configurations_iterator.next()
-        #phase                          = configuration_to_phase_shifts(configuration, phase_values2)
-        #phase                          = calculate_phase_shifts(configuration, phase_values2)
-        #phase                          = map_states_to_phase_shifts(configuration)
-        phase                          = configuration_to_phase_shifts_simple(configuration)
+    for i in range(num_configurations):
+
+        configuration                  = configurations_iterator.next().flatten()
+        phase                          = phase_values[configuration]
         Phi                            = np.repeat(phase, repeats=total_dependent_elements)
         Phi2                           = to_complex(Phi).flatten()
         prod                           = (G.T*H).flatten()
-        channel_reflected              = (np.dot(prod, Phi2) + h0)[0,0]
-        channel_mag                    = np.power( np.absolute(channel_reflected), 2)
+        channel_reflected              = np.dot(prod, Phi2) + h0
+        channel_reflected2             = channel_reflected[0,0]
+        channel_mag                    = np.power( np.absolute(channel_reflected2), 2)
         snr                            = channel_mag / noise_power
-
 
         if snr > best_snr:
             best_snr           = snr
             best_configuration = configuration
-
-
-        i += 1
-
-    #best_configuration = np.array(best_configuration)
-
 
     return best_configuration, best_snr
 
@@ -416,7 +372,6 @@ class Simulator:
                                  self.noise_power,
                                  self.total_RIS_controllable_elements,
                                  total_dependent_elements,
-                                 len(self.RIS_list[0].phase_space.values),
                                  self.RIS_list[0].phase_space.values
                                  )
 

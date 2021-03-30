@@ -62,6 +62,8 @@ dataset                = SimulationDataset(sim.num_RIS, sim.total_RIS_elements, 
 dataSaver              = DataSaver(sim.setup_name, save_dir='./data/simulations').set_configuration(sim.config)
 filename               = dataSaver.get_save_filename('exhaustive_search.npy')
 
+print('Loading from "{}"'.format(filename))
+
 
 dataset.load(filename)
 Xs             = dataset.get('RX_position')[:,0]
