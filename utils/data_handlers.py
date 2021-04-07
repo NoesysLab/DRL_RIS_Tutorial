@@ -141,6 +141,10 @@ class SimulationDataset:
 
 
     def load(self, filename, mode='rb'):
+
+        if len(filename.split('.')) == 1:
+            filename += '.npy'
+
         with open(filename, mode=mode) as fin:
             self.values = np.load(fin, allow_pickle=True)
             print('Loaded array of shape: {}'.format(self.values.shape))

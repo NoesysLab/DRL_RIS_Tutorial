@@ -144,3 +144,10 @@ def dBm_to_Watt(val_dBm):
 
 def dBW_to_Watt(val_dBW):
     return np.power(10, val_dBW/10)
+
+
+def fmt_position(position: Vector3D)-> str:
+    if position.dtype == np.int:
+        return "({:d}, {:d}, {:d})".format(position[0],position[1],position[2])
+    else:
+        return "({:>.2f}, {:>.2f}, {:>.2f})".format(position[0], position[1], position[2])

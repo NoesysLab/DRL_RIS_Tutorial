@@ -40,7 +40,7 @@ for i in tqdm(range(len(RX_positions))):
 
 
     for j in range(num_samples):
-        H, G, h0           = sim.simulate_transmission(sim.RX_locations[i,:])
+        H, G, h0           = sim.simulate_transmission(sim.RX_train_locations[i, :])
 
         H_samples[j, :] = H.flatten()
         G_samples[j, :] = G.flatten()

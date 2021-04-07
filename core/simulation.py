@@ -14,6 +14,7 @@ from core.channels import RIS_RX_channel_model, TX_RIS_channel_model, TX_RX_chan
 #from utils.binary_space import BinaryEnumerator
 from utils.custom_configparser import CustomConfigParser
 from utils.custom_types import Vector3D, Matrix3DCoordinates
+from utils.data_handlers import SimulationDataset, DataSaver
 from utils.misc import ray_to_elevation_azimuth, diag_per_row, dBm_to_Watt
 
 import configparser
@@ -57,7 +58,6 @@ def create_setup_from_config(config: CustomConfigParser):
 
 
     TX_coordinates                = config.getlist ('setup', 'TX_coordinates')
-    center_RX_position            = config.getlist ('setup', 'RX_grid_center')
     num_RIS                       = config.getint  ('setup', 'number_of_RIS')
     RIS_elements                  = config.getlist ('setup', 'RIS_elements',       dtype=int )
     RIS_element_groups            = config.getlist ('setup', 'RIS_element_groups', dtype=int )
@@ -68,6 +68,8 @@ def create_setup_from_config(config: CustomConfigParser):
     RIS_phase_values              = config.getlist ('RIS'  , 'phases')
     lambda_p                      = config.getfloat('channel_modeling', 'lambda_p')
     num_scatterers_clusters       = config.get('channel_modeling', 'num_scatterers_clusters')
+    center_RX_position            = config.getlist('exhaustive_search', 'RX_grid_center')
+
 
     assert RIS_elements[0] % RIS_element_groups[0] == 0 and RIS_elements[1] % RIS_element_groups[1] == 0
 
@@ -101,15 +103,21 @@ def create_setup_from_config(config: CustomConfigParser):
 
     RIS_coordinates = np.array(RIS_coordinates)
 
-    RX_locations    = get_receiver_positions(config.get('setup', 'RX_placement_type'),
-                                            config.getint('setup', 'number_of_RX_grid_positions'),
-                                            center_RX_position[0:2],
-                                            config.getfloat('setup', 'RX_grid_width'),
-                                            center_RX_position[2])
+    RX_train_locations = get_receiver_positions(  config.get   ('exhaustive_search', 'train_RX_placement_type'),
+                                                  config.getint('exhaustive_search', 'train_number_of_RX_grid_positions'),
+                                                  center_RX_position[0:2],
+                                                  config.getfloat('exhaustive_search', 'RX_grid_width'),
+                                                  center_RX_position[2])
 
+    RX_test_locations = get_receiver_positions(  config.get   ('exhaustive_search', 'test_RX_placement_type'),
+                                                  config.getint('exhaustive_search', 'test_number_of_RX_grid_positions'),
+                                                  center_RX_position[0:2],
+                                                  config.getfloat('exhaustive_search', 'RX_grid_width'),
+                                                  center_RX_position[2])
 
     return [ RIS_list,
-             RX_locations,
+             RX_train_locations,
+             RX_test_locations,
              TX_coordinates,
              RIS_coordinates,
              lambda_p,
@@ -266,22 +274,23 @@ class Simulator:
         setup_variables                          = create_setup_from_config(self.config)
 
         self.RIS_list                            = setup_variables[0]                     # type: List[RIS]
-        self.RX_locations                        = setup_variables[1]                     # type: Matrix3DCoordinates
-        self.TX_coordinates                      = setup_variables[2]                     # type: Vector3D
-        self.RIS_coordinates                     = setup_variables[3]                     # type: Matrix3DCoordinates
-        self.lambda_p                            = setup_variables[4]                     # type: float
-        self.num_clusters                        = setup_variables[5]                     # type: int
-        self.num_RIS                             = setup_variables[6]                     # type: int
-        self.total_RIS_elements                  = setup_variables[7]                     # type: int
-        self.total_RIS_controllable_elements     = setup_variables[8]                     # type: int
-        self.transmit_power                      = setup_variables[9]                     # type: float
-        self.noise_power                         = setup_variables[10]                    # type: float
-        self.center_RX_position                  = setup_variables[11]                    # type: Vector3D
+        self.RX_train_locations                  = setup_variables[1]                     # type: Matrix3DCoordinates
+        self.RX_test_locations                   = setup_variables[2]                     # type: Matrix3DCoordinates
+        self.TX_coordinates                      = setup_variables[3]                     # type: Vector3D
+        self.RIS_coordinates                     = setup_variables[4]                     # type: Matrix3DCoordinates
+        self.lambda_p                            = setup_variables[5]                     # type: float
+        self.num_clusters                        = setup_variables[6]                     # type: int
+        self.num_RIS                             = setup_variables[7]                     # type: int
+        self.total_RIS_elements                  = setup_variables[8]                     # type: int
+        self.total_RIS_controllable_elements     = setup_variables[9]                     # type: int
+        self.transmit_power                      = setup_variables[10]                    # type: float
+        self.noise_power                         = setup_variables[11]                    # type: float
+        self.center_RX_position                  = setup_variables[12]                    # type: Vector3D
 
         self.num_RIS_states                      = len(self.RIS_list[0].phase_space.values)   # type: int
         self.RIS_phase_values                    = self.RIS_list[0].phase_space.values        # type: np.ndarray
         self.noise_power                         = dBm_to_Watt(self.noise_power)
-
+        self.total_dependent_elements            = self.total_RIS_elements // self.total_RIS_controllable_elements
 
         self.batch_size      = self.config.getint('program_options', 'batch_size')             # type: int
         self.verbosity       = self.config.getint('program_options', 'verbosity_level')        # type: int
@@ -304,6 +313,14 @@ class Simulator:
         self.thetas_AoA              = scatterers_variables[4]                                # type: Matrix2D
         self.phis_AoA                = scatterers_variables[5]                                # type: Matrix2D
 
+
+
+        self.dataSaver               = DataSaver(self.setup_name,
+                                                 save_dir=self.config.get('program_options', 'output_directory_root')
+                                                ).set_configuration(self.config)
+
+
+
         print("Using setup '{}'".format(self.setup_name))
 
         if self.verbosity >= 1:
@@ -322,6 +339,20 @@ class Simulator:
             plot_simulation(self.RIS_list, self.cluster_positions, self.TX_coordinates, self.center_RX_position)
 
 
+    def get_dataset(self) -> SimulationDataset:
+        return SimulationDataset(self.num_RIS, self.total_RIS_elements,
+                                 self.total_RIS_controllable_elements)
+
+
+    def get_save_dir(self, filename=None)->str:
+        filename = '' if not filename else filename
+        return self.dataSaver.get_save_filename(filename)
+
+    def get_exhaustive_results_filename(self, mode):
+        assert mode in {'test', 'train'}
+        output_filename = self.config.get('exhaustive_search', mode + '_output_file_name')
+        output_filename_with_path = self.dataSaver.get_save_filename(output_filename)
+        return output_filename_with_path
 
     def configuration2phases(self, configurations: np.ndarray):
         assert configurations.ndim == 2
@@ -360,18 +391,10 @@ class Simulator:
 
     def find_best_configuration(self, H: np.ndarray, G: np.ndarray, h0=None):
         if h0 is None: h0 = 0.
-
-        #return exhaustive_search(self.RIS_list, H, G, h0, self.noise_power, self.batch_size)
-
-
-        total_dependent_elements = self.total_RIS_elements // self.total_RIS_controllable_elements
-
-
-
         return exhaustive_search(H, G, h0,
                                  self.noise_power,
                                  self.total_RIS_controllable_elements,
-                                 total_dependent_elements,
+                                 self.total_dependent_elements,
                                  self.RIS_list[0].phase_space.values
                                  )
 
