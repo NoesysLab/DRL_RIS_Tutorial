@@ -62,22 +62,23 @@ def visualize(sim: Simulator, mode: str):
 
     min_hamming_dists, avg_hamming_dists = hamming_distance_with_neighbors(dataset.get('RX_position')[:,0:2], configurations)
 
-    coordinates_heatmap(Xs, Ys, SNRs, 'SNR', 'Optimal SNR in every RX position')
+    coordinates_heatmap(Xs, Ys, SNRs, 'SNR', f'Optimal SNR in every RX position ({mode})')
     plt.savefig(sim.dataSaver.get_save_filename(mode+'_SNR_locality.png'))
     plt.show(block=False)
 
-    coordinates_heatmap(Xs, Ys, bits_set, 'Number of active elements', 'Optimal phase configuration in every RX position')
-    plt.savefig(sim.dataSaver.get_save_filename(mode+'_Active_elements_locality.png'))
-    plt.show(block=False)
+    # coordinates_heatmap(Xs, Ys, bits_set, 'Number of active elements', 'Optimal phase configuration in every RX position')
+    # plt.savefig(sim.dataSaver.get_save_filename(mode+'_Active_elements_locality.png'))
+    # plt.show(block=False)
 
 
-    coordinates_heatmap(Xs, Ys, min_hamming_dists, 'Minimum Hamming distance with neighbors', 'Local changes in optimal phase configurations')
+    coordinates_heatmap(Xs, Ys, min_hamming_dists, 'Minimum Hamming distance with neighbors',
+                        f'Local changes in optimal phase configurations ({mode})', cbar_lims=[0, configurations.shape[1]])
     plt.savefig(sim.dataSaver.get_save_filename(mode+'_Hamming_locality.png'))
     plt.show(block=False)
 
-    coordinates_heatmap(Xs, Ys, avg_hamming_dists, 'Average Hamming distance with neighbors', 'Local changes in optimal phase configurations')
-    plt.savefig(sim.dataSaver.get_save_filename(mode+'_average_Hamming_locality.png'))
-    plt.show(block=False)
+    # coordinates_heatmap(Xs, Ys, avg_hamming_dists, 'Average Hamming distance with neighbors', 'Local changes in optimal phase configurations')
+    # plt.savefig(sim.dataSaver.get_save_filename(mode+'_average_Hamming_locality.png'))
+    # plt.show(block=False)
 
 
 

@@ -15,7 +15,7 @@ from core.channels import RIS_RX_channel_model, TX_RIS_channel_model, TX_RX_chan
 from utils.custom_configparser import CustomConfigParser
 from utils.custom_types import Vector3D, Matrix3DCoordinates
 from utils.data_handlers import SimulationDataset, DataSaver
-from utils.misc import ray_to_elevation_azimuth, diag_per_row, dBm_to_Watt
+from utils.misc import ray_to_elevation_azimuth, diag_per_row, dBm_to_Watt, dBW_to_Watt
 
 import configparser
 
@@ -34,11 +34,9 @@ from utils.plotting import plot_simulation
 
 def check_setup_satisfies_constraints(config: CustomConfigParser):
 
+    assert config.get('program_options',  'version')          == '3.0.5'         , 'Code does not support the current config version.'
     assert config.get('RIS'  ,            'facing_direction') == 'perpendicular'
     assert config.get('setup',            'environment_type') == 'outdoor'
-    assert config.get('channel_modeling', 'TX_RIS_link_type') == 'Ricean'
-    assert config.get('channel_modeling', 'RIS_RX_link_type') == 'Pure LOS'
-    assert config.get('channel_modeling', 'TX_RX_link_type')  == 'Rayleigh'
 
 def load_config_from_file(filename: str)->CustomConfigParser:
     config = CustomConfigParser(interpolation=configparser.ExtendedInterpolation(),
@@ -61,22 +59,14 @@ def create_setup_from_config(config: CustomConfigParser):
     num_RIS                       = config.getint  ('setup', 'number_of_RIS')
     RIS_elements                  = config.getlist ('setup', 'RIS_elements',       dtype=int )
     RIS_element_groups            = config.getlist ('setup', 'RIS_element_groups', dtype=int )
-    noise_power                   = config.getfloat('setup', 'noise_power')
-    transmit_power                = config.getfloat('setup', 'transmit_power')
+    transmit_snr                  = config.getfloat('setup', 'transmit_SNR')
     element_dimensions            = config.getlist ('RIS'  , 'element_dimensions')
     element_gap                   = config.getlist ('RIS'  , 'element_gap')
     RIS_phase_values              = config.getlist ('RIS'  , 'phases')
-    lambda_p                      = config.getfloat('channel_modeling', 'lambda_p')
-    num_scatterers_clusters       = config.get('channel_modeling', 'num_scatterers_clusters')
     center_RX_position            = config.getlist('exhaustive_search', 'RX_grid_center')
-
+    runs                          = config.getint('exhaustive_search', 'average_over_runs')
 
     assert RIS_elements[0] % RIS_element_groups[0] == 0 and RIS_elements[1] % RIS_element_groups[1] == 0
-
-    if num_scatterers_clusters == 'random':
-        num_clusters = None
-    else:
-        num_clusters = config.getint('channel_modeling', 'num_scatterers_clusters')
 
     total_RIS_elements              = num_RIS * RIS_elements[0] * RIS_elements[1]
     total_RIS_controllable_elements = total_RIS_elements // (RIS_element_groups[0]* RIS_element_groups[1])
@@ -120,14 +110,12 @@ def create_setup_from_config(config: CustomConfigParser):
              RX_test_locations,
              TX_coordinates,
              RIS_coordinates,
-             lambda_p,
-             num_clusters,
              num_RIS,
              total_RIS_elements,
              total_RIS_controllable_elements,
-             transmit_power,
-             noise_power,
-             center_RX_position ]
+             transmit_snr,
+             center_RX_position,
+             runs]
 
 
 
@@ -216,7 +204,7 @@ def to_complex(x):
 
 
 @numba.njit(fastmath=True)
-def exhaustive_search(H, G, h0, noise_power,
+def exhaustive_search(H, G, h0, transmit_snr,
                       total_tunable_elements,
                       total_dependent_elements,
                       phase_values, )->Tuple[np.ndarray, float]:
@@ -242,7 +230,7 @@ def exhaustive_search(H, G, h0, noise_power,
         channel_reflected              = np.dot(prod, Phi2) + h0
         channel_reflected2             = channel_reflected[0,0]
         channel_mag                    = np.power( np.absolute(channel_reflected2), 2)
-        snr                            = channel_mag / noise_power
+        snr                            = channel_mag * transmit_snr
 
         if snr > best_snr:
             best_snr           = snr
@@ -253,73 +241,46 @@ def exhaustive_search(H, G, h0, noise_power,
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
 class Simulator:
     def __init__(self, setup_file: str):
-        self.setup_file                          = setup_file                             # type: str
-        self.config                              = load_config_from_file(self.setup_file) # type: CustomConfigParser
-        self.setup_name                          = setup_file.split("/")[-1].split(".")[0]
+        self.setup_file                          = setup_file                                                           # type: str
+        self.config                              = load_config_from_file(self.setup_file)                               # type: CustomConfigParser
+        self.setup_name                          = setup_file.split("/")[-1].split(".")[0]                              # type: str
 
         setup_variables                          = create_setup_from_config(self.config)
 
-        self.RIS_list                            = setup_variables[0]                     # type: List[RIS]
-        self.RX_train_locations                  = setup_variables[1]                     # type: Matrix3DCoordinates
-        self.RX_test_locations                   = setup_variables[2]                     # type: Matrix3DCoordinates
-        self.TX_coordinates                      = setup_variables[3]                     # type: Vector3D
-        self.RIS_coordinates                     = setup_variables[4]                     # type: Matrix3DCoordinates
-        self.lambda_p                            = setup_variables[5]                     # type: float
-        self.num_clusters                        = setup_variables[6]                     # type: int
-        self.num_RIS                             = setup_variables[7]                     # type: int
-        self.total_RIS_elements                  = setup_variables[8]                     # type: int
-        self.total_RIS_controllable_elements     = setup_variables[9]                     # type: int
-        self.transmit_power                      = setup_variables[10]                    # type: float
-        self.noise_power                         = setup_variables[11]                    # type: float
-        self.center_RX_position                  = setup_variables[12]                    # type: Vector3D
+        self.RIS_list                            = setup_variables[0]                                                   # type: List[RIS]
+        self.RX_train_locations                  = setup_variables[1]                                                   # type: Matrix3DCoordinates
+        self.RX_test_locations                   = setup_variables[2]                                                   # type: Matrix3DCoordinates
+        self.TX_coordinates                      = setup_variables[3]                                                   # type: Vector3D
+        self.RIS_coordinates                     = setup_variables[4]                                                   # type: Matrix3DCoordinates
+        self.num_RIS                             = setup_variables[5]                                                   # type: int
+        self.total_RIS_elements                  = setup_variables[6]                                                   # type: int
+        self.total_RIS_controllable_elements     = setup_variables[7]                                                   # type: int
+        self.transmit_SNR_db                     = setup_variables[8]                                                   # type: float
+        self.center_RX_position                  = setup_variables[9]                                                   # type: Vector3D
+        self.runs                                = setup_variables[10]                                                  # type: int
 
-        self.num_RIS_states                      = len(self.RIS_list[0].phase_space.values)   # type: int
-        self.RIS_phase_values                    = self.RIS_list[0].phase_space.values        # type: np.ndarray
-        self.noise_power                         = dBm_to_Watt(self.noise_power)
-        self.total_dependent_elements            = self.total_RIS_elements // self.total_RIS_controllable_elements
+        self.num_RIS_states                      = len(self.RIS_list[0].phase_space.values)                             # type: int
+        self.RIS_phase_values                    = self.RIS_list[0].phase_space.values                                  # type: np.ndarray
+        self.transmit_SNR                        = dBW_to_Watt(self.transmit_SNR_db)                                    # type: float
+        self.total_dependent_elements            = self.total_RIS_elements // self.total_RIS_controllable_elements      # type: int
 
-        self.batch_size      = self.config.getint('program_options', 'batch_size')             # type: int
-        self.verbosity       = self.config.getint('program_options', 'verbosity_level')        # type: int
-        self.seed            = self.config.getint('program_options', 'random_seed')            # type: int
-        self.stop_iterations = self.config.getint('program_options', 'stop_after_evaluations') # type: int
+        self.batch_size                          = self.config.getint('program_options', 'batch_size')                  # type: int
+        self.verbosity                           = self.config.getint('program_options', 'verbosity_level')             # type: int
+        self.seed                                = self.config.getint('program_options', 'random_seed')                 # type: int
+        self.stop_iterations                     = self.config.getint('program_options', 'stop_after_evaluations')      # type: int
+
+        self.dataSaver                           = DataSaver(self.setup_name,
+                                                             save_dir=self.config.get('program_options',
+                                                                                      'output_directory_root')
+                                                             ).set_configuration(self.config)
 
         if self.seed is not None:
-            np.random.seed(self.seed )
-            random.seed(self.seed )
+            np.random.seed(self.seed)
+            random.seed(self.seed)
 
         channels.initialize_from_config(self.config)
-
-
-        scatterers_variables = channels.generate_clusters(self.TX_coordinates, self.RIS_coordinates, self.lambda_p, self.num_clusters)
-
-        self.Sc                      = scatterers_variables[0]                                # type: List[int]
-        self.cluster_positions       = scatterers_variables[1]                                # type: Matrix3DCoordinates
-        self.TX_clusters_distances   = scatterers_variables[2]                                # type: Matrix2D
-        self.clusters_RIS_distances  = scatterers_variables[3]                                # type: Matrix3D
-        self.thetas_AoA              = scatterers_variables[4]                                # type: Matrix2D
-        self.phis_AoA                = scatterers_variables[5]                                # type: Matrix2D
-
-
-
-        self.dataSaver               = DataSaver(self.setup_name,
-                                                 save_dir=self.config.get('program_options', 'output_directory_root')
-                                                ).set_configuration(self.config)
-
-
 
         print("Using setup '{}'".format(self.setup_name))
 
@@ -332,11 +293,9 @@ class Simulator:
         if self.verbosity >= 2:
             self.config.print()
 
-        if self.verbosity >= 1:
-            print("Generated {} clusters with {} scatterers.".format(len(self.Sc), self.Sc))
 
         if self.config.getboolean('program_options', 'plot_setup'):
-            plot_simulation(self.RIS_list, self.cluster_positions, self.TX_coordinates, self.center_RX_position)
+            plot_simulation(self.RIS_list, None, self.TX_coordinates, self.center_RX_position)
 
 
     def get_dataset(self) -> SimulationDataset:
@@ -349,8 +308,15 @@ class Simulator:
         return self.dataSaver.get_save_filename(filename)
 
     def get_exhaustive_results_filename(self, mode):
-        assert mode in {'test', 'train'}
+        assert mode in {'test', 'train', 'test_avg', 'train_avg'}
+        if '_avg' in mode:
+            is_avg = True
+            mode = mode.replace("_avg","")
+        else:
+            is_avg = False
         output_filename = self.config.get('exhaustive_search', mode + '_output_file_name')
+        if is_avg:
+            output_filename += '_avg'
         output_filename_with_path = self.dataSaver.get_save_filename(output_filename)
         return output_filename_with_path
 
@@ -368,8 +334,7 @@ class Simulator:
 
 
     def simulate_transmission(self, RX_position):
-        H = channels.calculate_H(self.RIS_list, self.TX_coordinates, self.Sc, self.TX_clusters_distances,
-                                 self.clusters_RIS_distances, self.thetas_AoA, self.phis_AoA)
+        H = channels.calculate_H(self.RIS_list, self.TX_coordinates)
         G, h0 = channels.calculate_G_and_h0(self.RIS_list, self.TX_coordinates, RX_position)
         
         return H, G, h0
@@ -385,14 +350,14 @@ class Simulator:
             h0 = np.array(h0)
             h0 = h0[:, np.newaxis, np.newaxis]
 
-        snr = channels.compute_SNR(H, G, Phi, h0, self.noise_power)
+        snr = channels.compute_SNR(H, G, Phi, h0, self.transmit_SNR)
         return snr
 
 
     def find_best_configuration(self, H: np.ndarray, G: np.ndarray, h0=None):
         if h0 is None: h0 = 0.
         return exhaustive_search(H, G, h0,
-                                 self.noise_power,
+                                 self.transmit_SNR,
                                  self.total_RIS_controllable_elements,
                                  self.total_dependent_elements,
                                  self.RIS_list[0].phase_space.values

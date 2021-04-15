@@ -308,8 +308,11 @@ def plot_RIS_3D(ris: RIS, TX_pos: Vector3D, RX_pos: Vector3D, ax=None):
 
 
 def plot_simulation(RIS_list, cluster_positions, TX_coordinates, center_RX_position):
-    scatterers_positions = cluster_positions.reshape((-1, 3))  # Shape (C*Smax, 3)
-    scatterers_positions = scatterers_positions[np.all(scatterers_positions != 0, axis=1)]
+    if cluster_positions is not None:
+        scatterers_positions = cluster_positions.reshape((-1, 3))  # Shape (C*Smax, 3)
+        scatterers_positions = scatterers_positions[np.all(scatterers_positions != 0, axis=1)]
+    else:
+        scatterers_positions = None
 
     params = grid_plot_params.copy()
     params['zlims'] = [0, 3]
@@ -325,8 +328,13 @@ def plot_simulation(RIS_list, cluster_positions, TX_coordinates, center_RX_posit
 
 
 
-def coordinates_heatmap(Xs, Ys, color, cbar_label=None, title=None, x_label='x', y_label='y', smooth=False):
+def coordinates_heatmap(Xs, Ys, color, cbar_label=None, title=None, x_label='x', y_label='y', smooth=False, cbar_lims=None):
     interpolate = 'linear' if smooth == True else 'nearest'
+    if cbar_lims is not None:
+        vmin, vmax = cbar_lims
+    else:
+        vmin, vmax = None, None
+
     gridsize = Xs.shape[0]
     x_min = Xs.min()
     x_max = Xs.max()
@@ -342,12 +350,13 @@ def coordinates_heatmap(Xs, Ys, color, cbar_label=None, title=None, x_label='x',
     z_grid2 = z_grid2.reshape(xx.shape[0], yy.shape[0])
     fig, ax1 = plt.subplots()
     sc = ax1.imshow(z_grid2, extent=[x_min, x_max, y_min, y_max, ],
-                    origin='lower', cmap=cm.viridis)
+                    origin='lower', cmap=cm.viridis, vmin=vmin, vmax=vmax)
     cbar = plt.colorbar(sc)
     if cbar_label: cbar.ax.set_ylabel(cbar_label, rotation=90)
     if title: plt.title(title)
     if x_label: ax1.set_xlabel(x_label)
     if y_label: ax1.set_ylabel(y_label)
+
 
 
 if __name__ == '__main__':

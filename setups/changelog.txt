@@ -1,0 +1,9 @@
+Version:
+
+
+
+...
+
+3.0.4 : Added `TX_RX_mult_factor` in [channel_modeling]
+3.0.5 : Added `average_over_runs` in [exhaustive_search]
+

@@ -1,6 +1,7 @@
 from datetime import datetime
 import sys
 from tqdm import tqdm
+import numpy as np
 
 from core.simulation import Simulator
 from utils.misc import fmt_position
@@ -16,9 +17,10 @@ def run_search(sim: Simulator, RX_locations: Matrix3DCoordinates, mode: str):
 
     print(f'Running exhaustive search to generate {mode} dataset.')
 
-    start_t = datetime.now()
-    dataset  = sim.get_dataset()
-    iterator = range(RX_locations.shape[0])
+    start_t     = datetime.now()
+    dataset     = sim.get_dataset()
+    dataset_avg = sim.get_dataset()
+    iterator    = range(RX_locations.shape[0])
 
     if sim.verbosity >= 2:
         print("\nExhaustive search:")
@@ -29,15 +31,30 @@ def run_search(sim: Simulator, RX_locations: Matrix3DCoordinates, mode: str):
         if sim.stop_iterations is not None and i>= sim.stop_iterations: break
 
         position           = RX_locations[i, :]
-        H, G, h0           = sim.simulate_transmission(position)
-        configuration, snr = sim.find_best_configuration(H, G, h0)
-        dataset.add_datapoint(H, G, h0, position, configuration, snr)
 
-        if sim.verbosity >= 3: tqdm.write("Best configuration for {}: {} | SNR: {}".format(fmt_position(position), configuration, snr))
+        all_configurations = np.zeros((sim.runs, sim.total_RIS_controllable_elements))
+        all_snrs           = np.zeros(sim.runs)
+        H_avg, G_avg, h0_avg = None, None, None
+        for j in range(sim.runs):
+            H, G, h0                = sim.simulate_transmission(position)
+            configuration, snr      = sim.find_best_configuration(H, G, h0)
+            all_configurations[j,:] = configuration
+            all_snrs[j]             = snr
+            H_avg                   = H
+            G_avg                   = G
+            h0_avg                  = h0
+            dataset.add_datapoint(H, G, h0, position, configuration, snr)
+
+        configuration_avg = np.mean(all_configurations, axis=0)
+        snr_avg           = np.mean(all_snrs)
+        dataset_avg.add_datapoint(H_avg, G_avg, h0_avg, position, configuration_avg, snr_avg)
+
+        if sim.verbosity >= 3: tqdm.write("Best configuration for {}: {} | SNR: {}".format(fmt_position(position), configuration_avg, snr_avg))
 
 
     filename = sim.get_exhaustive_results_filename(mode)
     dataset.save(filename)
+    dataset_avg.save(filename+'_avg')
 
 
 
@@ -61,6 +78,8 @@ if __name__ == '__main__':
 
     run_search(sim, sim.RX_train_locations, 'train')
     visualize(sim, 'train')
+    visualize(sim, 'train_avg')
 
     run_search(sim, sim.RX_test_locations, 'test')
     visualize(sim, 'test')
+    visualize(sim, 'test_avg')
