@@ -191,7 +191,7 @@ class RIS:
                                                                              element_group_size,
                                                                              in_group_spacing,
                                                                              between_group_spacing)
-        self.element_spacing = in_group_spacing[0]
+        #self.element_spacing = in_group_spacing[0]
 
         # The internal state of the RIS, kept as a 1D array.
         # **IMPORTANT: This variable only keeps the state values for the tunable elements.

@@ -84,7 +84,8 @@ def create_setup_from_config(config: CustomConfigParser):
                   element_dimensions=element_dimensions,
                   in_group_spacing=element_gap,
                   between_group_spacing=element_gap,
-                  phase_space=('discrete', {'values': np.exp(1j*RIS_phase_values)}),
+  #todo: HARDCODED HERE                #phase_space=('discrete', {'values': np.exp(1j*RIS_phase_values)}),
+                  phase_space=('discrete', {'values': np.array([1,-1])}),
                   id_=i)
 
         ris.set_random_state()
@@ -247,6 +248,36 @@ class Simulator:
         self.config                              = load_config_from_file(self.setup_file)                               # type: CustomConfigParser
         self.setup_name                          = setup_file.split("/")[-1].split(".")[0]                              # type: str
 
+
+
+        self.initialize()
+
+        print("Using setup '{}'".format(self.setup_name))
+
+        if self.verbosity >= 1:
+            print("Running simulation with {} RIS and {} total elements ({} controllable)."
+                  .format(self.num_RIS,
+                          self.total_RIS_elements,
+                          self.total_RIS_controllable_elements))
+
+        if self.verbosity >= 2:
+            self.config.print()
+
+
+        if self.config.getboolean('program_options', 'plot_setup'):
+            plot_simulation(self.RIS_list, None, self.TX_coordinates, self.center_RX_position)
+
+
+
+    def update_config(self, section, variable, value):
+        self.config.set(section, variable, str(value))
+
+
+
+    def initialize(self):
+
+
+
         setup_variables                          = create_setup_from_config(self.config)
 
         self.RIS_list                            = setup_variables[0]                                                   # type: List[RIS]
@@ -281,21 +312,6 @@ class Simulator:
             random.seed(self.seed)
 
         channels.initialize_from_config(self.config)
-
-        print("Using setup '{}'".format(self.setup_name))
-
-        if self.verbosity >= 1:
-            print("Running simulation with {} RIS and {} total elements ({} controllable)."
-                  .format(self.num_RIS,
-                          self.total_RIS_elements,
-                          self.total_RIS_controllable_elements))
-
-        if self.verbosity >= 2:
-            self.config.print()
-
-
-        if self.config.getboolean('program_options', 'plot_setup'):
-            plot_simulation(self.RIS_list, None, self.TX_coordinates, self.center_RX_position)
 
 
     def get_dataset(self) -> SimulationDataset:

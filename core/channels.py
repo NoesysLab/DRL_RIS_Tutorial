@@ -20,6 +20,7 @@ wall_attenuation = None
 lightspeed = None
 frequency  = None
 wavelength = None
+
 k          = None
 q          = None
 
@@ -44,6 +45,11 @@ normalize_steering_vector = None
 normalize_Ge              = None
 ignore_LOS                = None
 TX_RX_mult_factor         = None
+
+
+element_spacing           = None
+
+
 rng = None
 
 
@@ -58,6 +64,7 @@ def initialize_from_config(config: CustomConfigParser):
 
     global f0_LOS, n_LOS, b_LOS, sigma_LOS, f0_NLOS, n_NLOS, b_NLOS, sigma_NLOS, lightspeed, frequency, q, wavelength, k, wall_attenuation
     global l_h, l_g, l_SISO, shadow_fading_exists,normalize_steering_vector, normalize_Ge, ignore_LOS, TX_RX_mult_factor
+    global element_spacing
 
 
     if config.get('setup', 'environment_type') == 'indoor':
@@ -98,6 +105,9 @@ def initialize_from_config(config: CustomConfigParser):
     l_g = dBW_to_Watt(l_g)
     if l_SISO != 0:
         l_SISO = dBW_to_Watt(l_SISO)
+
+
+    element_spacing = wavelength/2.
 
 
 def compute_SNR(H:np.ndarray, G: np.ndarray, Phi: np.ndarray, h0: np.ndarray, transmit_snr: float)->np.ndarray:
@@ -161,7 +171,7 @@ def calculate_pathloss(total_distance: Union[float, np.ndarray], isLOS: bool, wa
         pathloss += wall_attenuation
 
 
-    pathloss = dBW_to_Watt(pathloss)
+    #pathloss = dBW_to_Watt(pathloss)
 
     return pathloss
 
@@ -218,7 +228,7 @@ def calculate_array_response(
         assert phi.shape == theta.shape     , 'arrays of azimuth and elevation angles must be of equal sizes'
 
     d                   = element_spacing
-    element_coordinates = np.array(list(product(range(int(sqrt(N))), repeat=2)))
+    element_coordinates = np.array(list(product(range(int(sqrt(N))), repeat=2))) + 1
     x                   = element_coordinates[:,0]
     y                   = element_coordinates[:,1]
 
@@ -364,7 +374,7 @@ def calculate_H(ris_list: List[RIS], TX_location):
         dist_TX_RIS              = np.linalg.norm(TX_location - ris.position)
         theta_RIS_TX, phi_RIS_TX = ray_to_elevation_azimuth(TX_location, ris.position)
         h                        = TX_RIS_channel_model(ris.total_elements, dist_TX_RIS, theta_RIS_TX,
-                                                        phi_RIS_TX, ris.element_spacing )
+                                                        phi_RIS_TX, element_spacing )
         H.append(h)
 
     H = np.array(H).reshape((K, 1))
@@ -388,7 +398,7 @@ def calculate_G_and_h0(ris_list: List[RIS],
         dist_RIS_RX              = np.linalg.norm(RX_location - ris.position)
         theta_RIS_RX, phi_RIS_RX = ray_to_elevation_azimuth(ris.position, RX_location)
         g                        = RIS_RX_channel_model(ris.total_elements, dist_RIS_RX, theta_RIS_RX, phi_RIS_RX,
-                                                        ris.element_spacing)
+                                                        element_spacing)
         G.append(g)
 
     TX_RX_distance = np.linalg.norm(TX_location - RX_location)
