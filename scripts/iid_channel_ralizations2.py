@@ -146,17 +146,21 @@ def main(sim: Simulator, coeff_values: list, N=50):
 
         title_extra = f"($ \kappa_{{h}}={l_h},\ \kappa_{{g}}={l_g}$, Direct link: {TX_RX_mult_factor!=0})"
 
-        #plot_correlation_of_elements(configurations, title_extra)
-        #plt.show()
+        plot_correlation_of_elements(configurations, title_extra)
+        #plt.savefig('figs/channel_infos/phase_correlations_' + title_extra + '.png')
+        plt.show()
 
         plot_phase_elements_distributions(configurations, phase_names=['$0$', '$\pi$'], title_extra=title_extra)
+        #plt.savefig('figs/channel_infos/phase_distributions_'+title_extra+'.png')
         plt.show()
 
-        plot_snr_distribution(snrs, title_extra=title_extra)
-        plt.show()
+        #plot_snr_distribution(snrs, title_extra=title_extra)
+        #plt.savefig('figs/channel_infos/snr_distributions_' + title_extra + '.png')
+        #plt.show()
 
-        plot_channels(Hs, Gs, h0s, sim.num_RIS)
-        plt.show()
+        #plot_channels(Hs, Gs, h0s, sim.num_RIS)
+        #plt.savefig('figs/channel_infos/H_values_' + title_extra + '.png')
+        #plt.show()
 
         print(mean_stds_phases(configurations))
 
@@ -168,8 +172,8 @@ if __name__ == '__main__':
     coeff_values = [
     #   (l_h, l_g,  TX_RX_coefficient)
         (5,   13.2, 1),
-        (100, 100,  1),
-        (5,   13.2, 0),
-        (100, 100,  0),
+        (20, 50,  1),
+        # (5,   13.2, 0),
+        # (100, 100,  0),
     ]
     main(sim, coeff_values, N=100)

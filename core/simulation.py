@@ -84,8 +84,9 @@ def create_setup_from_config(config: CustomConfigParser):
                   element_dimensions=element_dimensions,
                   in_group_spacing=element_gap,
                   between_group_spacing=element_gap,
-  #todo: HARDCODED HERE                #phase_space=('discrete', {'values': np.exp(1j*RIS_phase_values)}),
+#todo: HARDCODED HERE                #phase_space=('discrete', {'values': np.exp(1j*RIS_phase_values)}),
                   phase_space=('discrete', {'values': np.array([1,-1])}),
+#                  phase_space=('discrete', {'values': np.exp(np.array([-np.pi/2, np.pi/2]))}),
                   id_=i)
 
         ris.set_random_state()
