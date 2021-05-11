@@ -39,7 +39,7 @@ class SimulationDataset:
         array_columns = 2*K + 2*K + 2 + 3 + K1 + 1
 
         if self.dataset_length is not None:
-            self.values = np.empty(shape=(self.dataset_length, array_columns))
+            self.values = np.empty(shape=(self.dataset_length, array_columns), dtype='float64')
         else:
             self.values = list()
 
@@ -48,12 +48,12 @@ class SimulationDataset:
 
     @property
     def shape(self):
-        self.values = np.array(self.values)
+        self.values = np.array(self.values, dtype='float64')
         return self.values.shape
 
     @property
     def size(self):
-        self.values = np.array(self.values)
+        self.values = np.array(self.values, dtype='float64')
         return self.values.size
 
     def check_sizes(self, H, G, h, RX_position, best_configuration, best_SNR):
@@ -128,7 +128,7 @@ class SimulationDataset:
         formats = list(formats)
 
         if not isinstance(self.values, np.ndarray):
-            self.values = np.array(self.values)
+            self.values = np.array(self.values, dtype='float64')
 
         if '.npy' in formats:
             with open(filename+'.npy', mode=mode) as fout:
@@ -136,7 +136,7 @@ class SimulationDataset:
 
         if '.csv' in formats:
             df = self._to_dataframe()
-            df.to_csv(filename+'.csv', index=False)
+            df.to_csv(filename+'.csv', index=False, float_format='%.20f')
 
 
 

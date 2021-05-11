@@ -34,7 +34,7 @@ from utils.plotting import plot_simulation
 
 def check_setup_satisfies_constraints(config: CustomConfigParser):
 
-    assert config.get('program_options',  'version')          == '3.0.5'         , 'Code does not support the current config version.'
+    assert config.get('program_options',  'version')          == '3.0.6'         , 'Code does not support the current config version.'
     assert config.get('RIS'  ,            'facing_direction') == 'perpendicular'
     assert config.get('setup',            'environment_type') == 'outdoor'
 

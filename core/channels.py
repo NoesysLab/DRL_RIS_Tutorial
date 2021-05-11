@@ -50,6 +50,8 @@ TX_RX_mult_factor         = None
 element_spacing           = None
 
 
+pathloss_db_sign          = None
+
 rng = None
 
 
@@ -64,7 +66,7 @@ def initialize_from_config(config: CustomConfigParser):
 
     global f0_LOS, n_LOS, b_LOS, sigma_LOS, f0_NLOS, n_NLOS, b_NLOS, sigma_NLOS, lightspeed, frequency, q, wavelength, k, wall_attenuation
     global l_h, l_g, l_SISO, shadow_fading_exists,normalize_steering_vector, normalize_Ge, ignore_LOS, TX_RX_mult_factor
-    global element_spacing
+    global element_spacing, pathloss_db_sign
 
 
     if config.get('setup', 'environment_type') == 'indoor':
@@ -98,8 +100,8 @@ def initialize_from_config(config: CustomConfigParser):
     normalize_steering_vector = config.getboolean('channel_modeling', 'normalize_steering_vector')
     normalize_Ge              = config.getboolean('channel_modeling', 'normalize_Ge')
     ignore_LOS                = config.getboolean('channel_modeling','ignore_LOS')
-    TX_RX_mult_factor           = config.getfloat('channel_modeling', 'TX_RX_mult_factor')
-
+    TX_RX_mult_factor         = config.getfloat('channel_modeling', 'TX_RX_mult_factor')
+    pathloss_db_sign          = config.get('channel_modeling', 'pathloss_db_sign')
 
     l_h = dBW_to_Watt(l_h)
     l_g = dBW_to_Watt(l_g)
@@ -159,19 +161,21 @@ def calculate_pathloss(total_distance: Union[float, np.ndarray], isLOS: bool, wa
         pathloss -= X_sigma
 
 
-
-    pathloss = -pathloss
-
+    if pathloss_db_sign == 'positive':
+        pathloss = -pathloss
+    elif pathloss_db_sign == 'negative':
+        pass
+    else:
+        raise ValueError
 
     if isinstance(total_distance, np.ndarray):
         pathloss = pathloss[0]
 
     if wallExists:
-        #pathloss -= wall_attenuation
-        pathloss += wall_attenuation
+        pathloss -= wall_attenuation
 
 
-    #pathloss = dBW_to_Watt(pathloss)
+    pathloss = dBW_to_Watt(pathloss)
 
     return pathloss
 
