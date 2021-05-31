@@ -34,9 +34,10 @@ from utils.plotting import plot_simulation
 
 def check_setup_satisfies_constraints(config: CustomConfigParser):
 
-    assert config.get('program_options',  'version')          == '3.0.6'         , 'Code does not support the current config version.'
-    assert config.get('RIS'  ,            'facing_direction') == 'perpendicular'
-    assert config.get('setup',            'environment_type') == 'outdoor'
+    assert config.get('program_options',  'version')            == '3.0.7'         , 'Code does not support the current config version.'
+    assert config.get('RIS'  ,            'facing_direction')   == 'perpendicular'
+    assert config.get('setup',            'environment_type')   == 'outdoor'
+    assert config.get('channel_modeling', 'units_scale').lower() in ['power', 'db']
 
 def load_config_from_file(filename: str)->CustomConfigParser:
     config = CustomConfigParser(interpolation=configparser.ExtendedInterpolation(),
@@ -205,7 +206,7 @@ def to_complex(x):
 
 
 
-@numba.njit(fastmath=True)
+@numba.njit(fastmath=False)
 def exhaustive_search(H, G, h0, transmit_snr,
                       total_tunable_elements,
                       total_dependent_elements,
@@ -295,7 +296,6 @@ class Simulator:
 
         self.num_RIS_states                      = len(self.RIS_list[0].phase_space.values)                             # type: int
         self.RIS_phase_values                    = self.RIS_list[0].phase_space.values                                  # type: np.ndarray
-        self.transmit_SNR                        = dBW_to_Watt(self.transmit_SNR_db)                                    # type: float
         self.total_dependent_elements            = self.total_RIS_elements // self.total_RIS_controllable_elements      # type: int
 
         self.batch_size                          = self.config.getint('program_options', 'batch_size')                  # type: int
@@ -307,6 +307,12 @@ class Simulator:
                                                              save_dir=self.config.get('program_options',
                                                                                       'output_directory_root')
                                                              ).set_configuration(self.config)
+
+        if self.config.get('channel_modeling', 'units_scale') == 'power':
+            self.transmit_SNR = dBW_to_Watt(self.transmit_SNR_db)                                                       # type: float
+        else:
+            self.transmit_SNR = self.transmit_SNR_db
+
 
         if self.seed is not None:
             np.random.seed(self.seed)
@@ -358,17 +364,37 @@ class Simulator:
     
     
     
-    def calculate_SNR(self, H: np.ndarray, G: np.ndarray, Phi: np.ndarray, h0=None):
+    def calculate_SNR(self, H: np.ndarray, G: np.ndarray, configuration: np.ndarray, h0=None):
         if h0 is None: h0 = 0.
 
-        if H.ndim > 1:
-            H  = H[:, :, np.newaxis]
-            G  = G[:, np.newaxis, :]
-            h0 = np.array(h0)
-            h0 = h0[:, np.newaxis, np.newaxis]
 
-        snr = channels.compute_SNR(H, G, Phi, h0, self.transmit_SNR)
-        return snr
+        # todo: Code needs a lot of cleanup: Numba, share it with exhaustive search, add `phase_space` to simulator
+
+        def __compute_SNR_single(H, G, configuration, h0, phase_values, transmit_snr, total_dependent_elements):
+            phase              = phase_values[configuration]
+            Phi                = np.repeat(phase, repeats=total_dependent_elements)
+            Phi2               = Phi.astype('complex').flatten()
+            prod               = (G * H).flatten()
+            channel_reflected  = np.dot(prod, Phi2) + h0
+            channel_reflected2 = channel_reflected
+            channel_mag        = np.power(np.absolute(channel_reflected2), 2)
+            snr                = channel_mag * transmit_snr
+            return snr
+
+        if H.ndim == 1:
+            return __compute_SNR_single(H,G, configuration, h0, self.RIS_list[0].phase_space.values,
+                   self.transmit_SNR,
+                   self.total_dependent_elements,)
+
+
+        else:
+            SNRs = np.array([__compute_SNR_single(H[i, :], G[i, :], configuration[i, :], h0[i],
+                                           self.RIS_list[0].phase_space.values,
+                                           self.transmit_SNR,
+                                           self.total_dependent_elements,
+                                           ) for i in range(H.shape[0])])
+
+            return SNRs
 
 
     def find_best_configuration(self, H: np.ndarray, G: np.ndarray, h0=None):

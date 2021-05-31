@@ -154,11 +154,11 @@ def main(sim: Simulator, coeff_values: list, N=50):
         #plt.savefig('figs/channel_infos/phase_distributions_'+title_extra+'.png')
         plt.show()
 
-        #plot_snr_distribution(snrs, title_extra=title_extra)
+        plot_snr_distribution(snrs, title_extra=title_extra)
         #plt.savefig('figs/channel_infos/snr_distributions_' + title_extra + '.png')
         #plt.show()
 
-        #plot_channels(Hs, Gs, h0s, sim.num_RIS)
+        plot_channels(Hs, Gs, h0s, sim.num_RIS)
         #plt.savefig('figs/channel_infos/H_values_' + title_extra + '.png')
         #plt.show()
 
@@ -168,7 +168,7 @@ def main(sim: Simulator, coeff_values: list, N=50):
 
 
 if __name__ == '__main__':
-    sim = Simulator('setups/testing.ini')
+    sim = Simulator('setups/experiment1.ini')
     coeff_values = [
     #   (l_h, l_g,  TX_RX_coefficient)
         (5,   13.2, 1),

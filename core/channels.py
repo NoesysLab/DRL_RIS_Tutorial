@@ -45,12 +45,9 @@ normalize_steering_vector = None
 normalize_Ge              = None
 ignore_LOS                = None
 TX_RX_mult_factor         = None
-
-
 element_spacing           = None
-
-
 pathloss_db_sign          = None
+units_scale               = None
 
 rng = None
 
@@ -66,7 +63,7 @@ def initialize_from_config(config: CustomConfigParser):
 
     global f0_LOS, n_LOS, b_LOS, sigma_LOS, f0_NLOS, n_NLOS, b_NLOS, sigma_NLOS, lightspeed, frequency, q, wavelength, k, wall_attenuation
     global l_h, l_g, l_SISO, shadow_fading_exists,normalize_steering_vector, normalize_Ge, ignore_LOS, TX_RX_mult_factor
-    global element_spacing, pathloss_db_sign
+    global element_spacing, pathloss_db_sign, units_scale
 
 
     if config.get('setup', 'environment_type') == 'indoor':
@@ -102,21 +99,17 @@ def initialize_from_config(config: CustomConfigParser):
     ignore_LOS                = config.getboolean('channel_modeling','ignore_LOS')
     TX_RX_mult_factor         = config.getfloat('channel_modeling', 'TX_RX_mult_factor')
     pathloss_db_sign          = config.get('channel_modeling', 'pathloss_db_sign')
+    units_scale                =  config.get('channel_modeling', 'units_scale')
 
-    l_h = dBW_to_Watt(l_h)
-    l_g = dBW_to_Watt(l_g)
-    if l_SISO != 0:
-        l_SISO = dBW_to_Watt(l_SISO)
+    if units_scale == 'power':
+        l_h = dBW_to_Watt(l_h)
+        l_g = dBW_to_Watt(l_g)
+        if l_SISO != 0:
+            l_SISO = dBW_to_Watt(l_SISO)
 
 
     element_spacing = wavelength/2.
 
-
-def compute_SNR(H:np.ndarray, G: np.ndarray, Phi: np.ndarray, h0: np.ndarray, transmit_snr: float)->np.ndarray:
-    complete_channel_coefficients = G @ Phi @ H
-    complete_channel_coefficients += h0
-    snr = np.power(np.absolute(complete_channel_coefficients), 2) * transmit_snr
-    return snr
 
 
 
@@ -174,8 +167,8 @@ def calculate_pathloss(total_distance: Union[float, np.ndarray], isLOS: bool, wa
     if wallExists:
         pathloss -= wall_attenuation
 
-
-    pathloss = dBW_to_Watt(pathloss)
+    if units_scale == 'power':
+        pathloss = dBW_to_Watt(pathloss)
 
     return pathloss
 
