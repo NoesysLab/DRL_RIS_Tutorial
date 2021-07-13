@@ -116,62 +116,62 @@ def initialize_from_config(config: CustomConfigParser):
 
 
 def calculate_pathloss(total_distance: Union[float, np.ndarray], isLOS: bool, wallExists=False, ignore_shadow_factor=False)->Union[np.ndarray, float]:
-    """
-
-    Calculate the attenuation of an outdoor link using the 5G path loss model (the close-in free space reference distance
-    model with frequency-dependent path loss exponent). Using equation (5) from [Basar 2020]. OUTPUT IN WATT.
-
-    :param total_distance: The distance(s) of the total path between the two endpoints of the link. Can be either a numpy array or a float. Note for scattered paths that the total length of the arc is expected.
-    :param isLOS: Whether the link is Line of Sight or not
-    :param wallExists: If a wall interferes in the LOS path. If True, a 10dB penetration loss is induced.
-    :return: The attenuation(s) along the path. The result is either a float or a numpy array depending on the type of `total_distance`.
-    """
-    if isLOS:
-        n     = n_LOS
-        f0    = f0_LOS
-        sigma = sigma_LOS
-        b     = b_LOS
-
-    else:
-        n     = n_NLOS
-        f0    = f0_NLOS
-        sigma = sigma_NLOS
-        b     = b_NLOS
-
-
-
-
-
-    if b != 0:
-        frequency_dependent_term = b *( frequency - f0) / f0
-    else:
-        frequency_dependent_term = 0
-
-    pathloss = -20*log10(4*pi/wavelength) - 10*n * (1 + frequency_dependent_term) * safe_log10(total_distance)    # Equation (5)
-    if not ignore_shadow_factor:
-        shape   = total_distance.shape if isinstance(total_distance, np.ndarray) else [1]  # A trick for the code to work both for arrays and scalar distance
-        X_sigma = sigma * np.random.rand(*shape)  # Shadow fading term in logarithmic units
-        pathloss -= X_sigma
-
-
-    if pathloss_db_sign == 'positive':
-        pathloss = -pathloss
-    elif pathloss_db_sign == 'negative':
-        pass
-    else:
-        raise ValueError
-
-    if isinstance(total_distance, np.ndarray):
-        pathloss = pathloss[0]
-
-    if wallExists:
-        pathloss -= wall_attenuation
-
-    if units_scale == 'power':
-        pathloss = dBW_to_Watt(pathloss)
-
-    return pathloss
-
+    # """
+    #
+    # Calculate the attenuation of an outdoor link using the 5G path loss model (the close-in free space reference distance
+    # model with frequency-dependent path loss exponent). Using equation (5) from [Basar 2020]. OUTPUT IN WATT.
+    #
+    # :param total_distance: The distance(s) of the total path between the two endpoints of the link. Can be either a numpy array or a float. Note for scattered paths that the total length of the arc is expected.
+    # :param isLOS: Whether the link is Line of Sight or not
+    # :param wallExists: If a wall interferes in the LOS path. If True, a 10dB penetration loss is induced.
+    # :return: The attenuation(s) along the path. The result is either a float or a numpy array depending on the type of `total_distance`.
+    # """
+    # if isLOS:
+    #     n     = n_LOS
+    #     f0    = f0_LOS
+    #     sigma = sigma_LOS
+    #     b     = b_LOS
+    #
+    # else:
+    #     n     = n_NLOS
+    #     f0    = f0_NLOS
+    #     sigma = sigma_NLOS
+    #     b     = b_NLOS
+    #
+    #
+    #
+    #
+    #
+    # if b != 0:
+    #     frequency_dependent_term = b *( frequency - f0) / f0
+    # else:
+    #     frequency_dependent_term = 0
+    #
+    # pathloss = -20*log10(4*pi/wavelength) - 10*n * (1 + frequency_dependent_term) * safe_log10(total_distance)    # Equation (5)
+    # if not ignore_shadow_factor:
+    #     shape   = total_distance.shape if isinstance(total_distance, np.ndarray) else [1]  # A trick for the code to work both for arrays and scalar distance
+    #     X_sigma = sigma * np.random.rand(*shape)  # Shadow fading term in logarithmic units
+    #     pathloss -= X_sigma
+    #
+    #
+    # if pathloss_db_sign == 'positive':
+    #     pathloss = -pathloss
+    # elif pathloss_db_sign == 'negative':
+    #     pass
+    # else:
+    #     raise ValueError
+    #
+    # if isinstance(total_distance, np.ndarray):
+    #     pathloss = pathloss[0]
+    #
+    # if wallExists:
+    #     pathloss -= wall_attenuation
+    #
+    # if units_scale == 'power':
+    #     pathloss = dBW_to_Watt(pathloss)
+    #
+    # return pathloss
+    return np.power(wavelength/(4*np.pi*total_distance),  2)
 
 
 
