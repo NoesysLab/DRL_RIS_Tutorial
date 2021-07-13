@@ -1,3 +1,5 @@
+from typing import Tuple
+
 import numpy as np
 from utils.custom_types import *
 
@@ -77,7 +79,7 @@ def condense_array(a: np.ndarray, group_size: Tuple[int, int]):
 
 
 def diag_per_row(M):
-    b = np.zeros((M.shape[0], M.shape[1], M.shape[1]))
+    b = np.zeros((M.shape[0], M.shape[1], M.shape[1]), dtype=M.dtype)
     diag = np.arange(M.shape[1])
     b[:, diag, diag] = M
     return b
@@ -96,3 +98,56 @@ def generate_binary_matrix(digits, start_from=None, end=None):
 
 
     return B
+
+
+
+def cart2sph(x,y,z):
+    XsqPlusYsq = x**2 + y**2
+    r = np.sqrt(XsqPlusYsq + z**2)               # r
+    elev = np.arctan2(z,np.sqrt(XsqPlusYsq))     # theta
+    az = np.arctan2(y,x)                           # phi
+    return r, elev, az
+
+
+def ray_to_elevation_azimuth(starting_point: Union[Vector3D, Matrix3DCoordinates],
+                             ending_point: Union[Vector3D, Matrix3DCoordinates]) -> Union[Tuple[float,float], Tuple[Vector, Vector]]:
+
+    v = ending_point - starting_point # type: np.ndarray
+    if starting_point.ndim == 1:
+        v = v.reshape((1,3))
+
+    _, elev, az = cart2sph(v[:,0], v[:,1], v[:,2])
+
+    if starting_point.ndim == 1:
+        return float(elev), float(az)
+    else:
+        return elev, az
+
+
+
+def safe_log10(A: np.ndarray)->np.ndarray:
+    return np.log10(A, out=np.zeros_like(A), where=(A!=0))
+
+
+def sample_gaussian_complex_matrix(shape: Tuple, mu=None, sigma=None):
+    C =  np.random.randn(*shape) + 1j * np.random.randn(*shape)
+    if sigma is not None:
+        C *= sigma
+
+    if mu is not None:
+        C += mu
+
+    return C
+
+def dBm_to_Watt(val_dBm):
+    return np.power(10, (val_dBm/10 - 3)  )
+
+def dBW_to_Watt(val_dBW):
+    return np.power(10, val_dBW/10)
+
+
+def fmt_position(position: Vector3D)-> str:
+    if position.dtype == np.int:
+        return "({:d}, {:d}, {:d})".format(position[0],position[1],position[2])
+    else:
+        return "({:>.2f}, {:>.2f}, {:>.2f})".format(position[0], position[1], position[2])

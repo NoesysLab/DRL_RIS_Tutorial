@@ -1,180 +1,196 @@
-import itertools
 
+
+from numpy import sin, cos, pi, sqrt, sum, floor, ceil, power, log10, exp
 import numpy as np
-from copy import deepcopy
 from typing import *
+from itertools import product
+import warnings
 
-from tqdm import tqdm
 
-from core import globals
+
+
+
 from core.surfaces import RIS
-from utils.binary_space import BinaryEnumerator
-from utils.misc import Vector, Matrix2D, convert2array, Vector3D
-from utils.complex import sample_gaussian_complex_matrix
+from utils.custom_configparser import CustomConfigParser
+from utils.custom_types import Vector, Matrix2D, Matrix3D, ComplexVector, ComplexArray, Vector3D, Matrix3DCoordinates
+from utils.misc import safe_log10, sample_gaussian_complex_matrix, dBW_to_Watt, ray_to_elevation_azimuth
+
+wall_attenuation = None
+
+lightspeed = None
+frequency  = None
+wavelength = None
+
+k          = None
+q          = None
+
+f0_LOS     = None
+n_LOS      = None
+b_LOS      = None
+sigma_LOS  = None
+
+f0_NLOS    = None
+n_NLOS     = None
+b_NLOS     = None
+sigma_NLOS = None
 
 
-def calc_pathloss(tx_location,
-                  rx_location,
-                  isLOS,):
 
-    myDist = np.sqrt(np.sum(np.power(tx_location-rx_location, 2), axis=1)).reshape((tx_location.shape[0], rx_location.shape[0]))
-    if isLOS:
-        pathlossDB = globals.pathlossCoefficientLOS \
-                     + 10 * globals.pathlossExponentLOS \
-                     * np.log10(myDist / globals.referenceDistance)
+
+l_h                       = None
+l_g                       = None
+l_SISO                    = None
+shadow_fading_exists      = None
+normalize_steering_vector = None
+normalize_Ge              = None
+ignore_LOS                = None
+TX_RX_mult_factor         = None
+element_spacing           = None
+pathloss_db_sign          = None
+units_scale               = None
+
+rng = None
+
+
+def initialize_from_config(config: CustomConfigParser):
+    global rng
+    seed = config.getint('program_options', 'random_seed')
+    if seed is not None:
+        rng = np.random.RandomState(seed)
     else:
-        pathlossDB = globals.pathlossCoefficientNLOS \
-                     + 10 * globals.pathlossExponentNLOS \
-                     * np.log10(myDist / globals.referenceDistance)
-
-    myPthLoss = np.power(10, (pathlossDB/10))
-    return myPthLoss
+        rng = np.random.RandomState()
 
 
+    global f0_LOS, n_LOS, b_LOS, sigma_LOS, f0_NLOS, n_NLOS, b_NLOS, sigma_NLOS, lightspeed, frequency, q, wavelength, k, wall_attenuation
+    global l_h, l_g, l_SISO, shadow_fading_exists,normalize_steering_vector, normalize_Ge, ignore_LOS, TX_RX_mult_factor
+    global element_spacing, pathloss_db_sign, units_scale
 
 
+    if config.get('setup', 'environment_type') == 'indoor':
+        section = 'pathloss_indoor'
+    elif config.get('setup', 'environment_type') == 'outdoor':
+        section = 'pathloss_outdoor'
+    else:
+        raise ValueError
+
+    f0_LOS     = config.getfloat(section, 'f0_LOS')
+    n_LOS      = config.getfloat(section, 'n_LOS')
+    b_LOS      = config.getfloat(section, 'b_LOS')
+    sigma_LOS  = config.getfloat(section, 'sigma_LOS')
+    f0_NLOS    = config.getfloat(section, 'f0_NLOS')
+    n_NLOS     = config.getfloat(section, 'n_NLOS')
+    b_NLOS     = config.getfloat(section, 'b_NLOS')
+    sigma_NLOS = config.getfloat(section, 'sigma_NLOS')
+
+    lightspeed = config.getfloat('constants', 'speed_of_light')
+    frequency  = config.getfloat('setup', 'frequency')
+    q          = config.getfloat('channel_modeling', 'q')
+
+    wavelength = lightspeed / frequency
+    k          = 2 * pi / wavelength
+
+    wall_attenuation          = config.getfloat('channel_modeling', 'wall_attenuation')
+    l_h                       = config.getfloat('channel_modeling', 'l_h')
+    l_g                       = config.getfloat('channel_modeling', 'l_g')
+    l_SISO                    = config.getfloat('channel_modeling', 'l_SISO')
+    shadow_fading_exists      = config.getboolean('channel_modeling', 'shadow_fading_exists')
+    normalize_steering_vector = config.getboolean('channel_modeling', 'normalize_steering_vector')
+    normalize_Ge              = config.getboolean('channel_modeling', 'normalize_Ge')
+    ignore_LOS                = config.getboolean('channel_modeling','ignore_LOS')
+    TX_RX_mult_factor         = config.getfloat('channel_modeling', 'TX_RX_mult_factor')
+    pathloss_db_sign          = config.get('channel_modeling', 'pathloss_db_sign')
+    units_scale                =  config.get('channel_modeling', 'units_scale')
+
+    if units_scale == 'power':
+        l_h = dBW_to_Watt(l_h)
+        l_g = dBW_to_Watt(l_g)
+        if l_SISO != 0:
+            l_SISO = dBW_to_Watt(l_SISO)
 
 
-
-class Link:
-    def __init__(self):
-        self.sender_coordinates   = None
-        self.receiver_coordinates = None
-        self.num_senders          = None
-        self.num_receivers        = None
-        self.num_transmissions    = 1
-
-    def initialize(self, sender_coordinates: Matrix2D, receiver_coordinates: Matrix2D):
-        self.sender_coordinates   = np.array(sender_coordinates)
-        self.receiver_coordinates = np.array(receiver_coordinates)
-        self.num_senders          = self.sender_coordinates.shape[0]
-        self.num_receivers        = self.receiver_coordinates.shape[0]
-
-    def get_transmission_matrix(self)->Matrix2D:
-        raise NotImplemented
-
-
-
-
-
-
-
-
-
-class RayleighFadeLink(Link):
-    def __init__(self,  mult_factor: float, isLOS=True):
-        super().__init__()
-        self.mult_factor         = mult_factor
-        self.isLOS               = isLOS
-        self.fades               = None
-        self.path_losses         = None
-        self.transmission_matrix = None
-
-    def initialize(self, sender_coordinates: Matrix2D, receiver_coordinates: Matrix2D):
-        super().initialize(sender_coordinates, receiver_coordinates)
-
-        self.fades               = sample_gaussian_complex_matrix((self.num_senders, self.num_receivers)) / np.sqrt(2)
-        self.path_losses         = np.empty_like(self.fades)
-        self.transmission_matrix = np.empty_like(self.fades)
-
-        # for i in range(self.num_senders):
-        #     for j in range(self.num_receivers):
-        #         self.path_losses[i,j] = calc_pathloss(self.sender_coordinates[i,:],
-        #                                               self.receiver_coordinates[j,:],
-        #                                               self.isLOS)
-        self.path_losses = calc_pathloss(self.sender_coordinates, self.receiver_coordinates, self.isLOS)
-        self.transmission_matrix = self.mult_factor * self.fades / np.sqrt(self.path_losses)
-
-
-    def get_transmission_matrix(self)->Matrix2D:
-        return np.transpose(self.transmission_matrix)
+    element_spacing = wavelength/2.
 
 
 
 
-class Channel:
-    def __init__(self,
-                 TX_position          : Vector3D,
-                 RX_position          : Vector3D,
-                 TX_RIS_link_info     : Tuple[Type[Link], Dict],
-                 RX_RIS_link_info     : Tuple[Type[Link], Dict],
-                 TX_RX_link_info      : Tuple[Type[Link], Dict],
-                 noise_power          : float):
 
 
-        self.tx_position             = TX_position              # type: Vector3D
-        self.rx_position             = RX_position              # type: Vector3D
-        self.noise_power             = noise_power              # type: float
+def calculate_pathloss(total_distance: Union[float, np.ndarray], isLOS: bool, wallExists=False, ignore_shadow_factor=False)->Union[np.ndarray, float]:
+    # """
+    #
+    # Calculate the attenuation of an outdoor link using the 5G path loss model (the close-in free space reference distance
+    # model with frequency-dependent path loss exponent). Using equation (5) from [Basar 2020]. OUTPUT IN WATT.
+    #
+    # :param total_distance: The distance(s) of the total path between the two endpoints of the link. Can be either a numpy array or a float. Note for scattered paths that the total length of the arc is expected.
+    # :param isLOS: Whether the link is Line of Sight or not
+    # :param wallExists: If a wall interferes in the LOS path. If True, a 10dB penetration loss is induced.
+    # :return: The attenuation(s) along the path. The result is either a float or a numpy array depending on the type of `total_distance`.
+    # """
+    # if isLOS:
+    #     n     = n_LOS
+    #     f0    = f0_LOS
+    #     sigma = sigma_LOS
+    #     b     = b_LOS
+    #
+    # else:
+    #     n     = n_NLOS
+    #     f0    = f0_NLOS
+    #     sigma = sigma_NLOS
+    #     b     = b_NLOS
+    #
+    #
+    #
+    #
+    #
+    # if b != 0:
+    #     frequency_dependent_term = b *( frequency - f0) / f0
+    # else:
+    #     frequency_dependent_term = 0
+    #
+    # pathloss = -20*log10(4*pi/wavelength) - 10*n * (1 + frequency_dependent_term) * safe_log10(total_distance)    # Equation (5)
+    # if not ignore_shadow_factor:
+    #     shape   = total_distance.shape if isinstance(total_distance, np.ndarray) else [1]  # A trick for the code to work both for arrays and scalar distance
+    #     X_sigma = sigma * np.random.rand(*shape)  # Shadow fading term in logarithmic units
+    #     pathloss -= X_sigma
+    #
+    #
+    # if pathloss_db_sign == 'positive':
+    #     pathloss = -pathloss
+    # elif pathloss_db_sign == 'negative':
+    #     pass
+    # else:
+    #     raise ValueError
+    #
+    # if isinstance(total_distance, np.ndarray):
+    #     pathloss = pathloss[0]
+    #
+    # if wallExists:
+    #     pathloss -= wall_attenuation
+    #
+    # if units_scale == 'power':
+    #     pathloss = dBW_to_Watt(pathloss)
+    #
+    # return pathloss
+    return np.power(wavelength/(4*np.pi*total_distance),  2)
 
-        link_type, link_args         = TX_RIS_link_info
-        self.TX_RIS_link             = link_type(**link_args)   # type: Link
-
-        link_type, link_args         = RX_RIS_link_info
-        self.RX_RIS_link             = link_type(**link_args)   # type: Link
-
-        link_type, link_args         = TX_RX_link_info
-        self.TX_RX_link              = link_type(**link_args)   # type: Link
-
-        self.ris_phases              = None                     # type: Vector # length: num_elements_per_ris * num_ris
 
 
 
-    @staticmethod
-    def get_combined_elements_coordinates(ris_list: List[RIS]):
-        return np.concatenate([ris.get_element_coordinates() for ris in ris_list], axis=0)
-
-    @staticmethod
-    def get_combined_ris_phase(ris_list: List[RIS]):
-        return np.concatenate([ris.get_phase('1D') for ris in ris_list])
-
-
-
-    def _calculate_SNR(self, H, Phi, G, h=None):
-        channel_reflected = G @ Phi @ H # The @ operator denotes matrix multiplication (Python >= 3.5 - PEP 465)
-        if h is not None:
-            channel_reflected += h
-        snr = np.power(np.absolute(channel_reflected), 2) / self.noise_power
-        return snr
-
-
-
-    def simulate_transmission(self, ris_list: List[RIS], combined_RIS_phase=None):
-
-        ris_element_coordinates = self.get_combined_elements_coordinates(ris_list)
-
-        if combined_RIS_phase is not None:
-            ris_phases = combined_RIS_phase
-            if len(ris_phases) != sum([ris.total_elements for ris in ris_list]) :
-                raise ValueError("Combined RIS phase does not equal to the total number of independent RIS elements.")
+def calculate_element_radiation(theta: Union[float, np.ndarray])->Union[float, np.ndarray]:
+    """
+    Calculate the RIS element radiation for an incoming signal using the cos^q pattern.
+    Equation (4) from [Basar 2020]
+    :param theta: Elevation angle between the ray and the RIS broadside
+    :return: RIS radiation, G_e(theta).
+    """
+    assert np.all(-pi/2 < theta) and np.all(theta < pi/2)
+    if normalize_Ge:
+        if isinstance(theta, np.ndarray):
+            return np.ones_like(theta)
         else:
-            ris_phases = self.get_combined_ris_phase(ris_list)
-
-        self.TX_RIS_link.initialize([self.tx_position]     , ris_element_coordinates)
-        self.RX_RIS_link.initialize(ris_element_coordinates, [self.rx_position])
-        self.TX_RX_link.initialize([self.tx_position]      , [self.rx_position])
-
-        H   = self.TX_RIS_link.get_transmission_matrix() # shape: (K,1)
-        G   = self.RX_RIS_link.get_transmission_matrix() # shape: (1,K)
-        h   = self.TX_RX_link.get_transmission_matrix()  # shape: (1,1)
-        Phi = np.diag(ris_phases)                        # shape: (K,K)
-
-
-        snr      = self._calculate_SNR (H, Phi, G, h)
-        angle_TX = np.angle(H)
-        mag_TX   = np.abs(H)
-        angle_RX = np.angle(G)
-        mag_RX   = np.abs(G)
-
-        return snr, angle_TX, mag_TX, angle_RX, mag_RX
-
-
-    @staticmethod
-    def all_ris_have_same_number_or_elements(ris_list):
-        return all([ris.num_tunable_elements == ris_list[0].num_tunable_elements and ris.total_elements == ris_list[0].total_elements for ris in ris_list])
-
-    @staticmethod
-    def are_all_states_of_equal_values(ris_list):
-        return all([len(ris.phase_space.values)==len(ris_list[0].phase_space.values) for ris in ris_list])
+            return 1
+    else:
+        return 2 * (2*q+1) * power(cos(theta), 2*q)
 
 
 
@@ -183,107 +199,211 @@ class Channel:
 
 
 
-    def exhaustive_snr_search(self, ris_list: List[RIS], batch_size=2**11, show_progress_bar=False):
 
-        if not self.all_ris_have_same_number_or_elements(ris_list):
-            raise ValueError("Currently supporting RISs of equal number of elements (tunable and total).")
+def calculate_array_response(
+                             N              : int,
+                             phi            : Union[np.ndarray, float],
+                             theta          : Union[np.ndarray, float],
+                             element_spacing: float,
+                            )->ComplexArray:
+    """
 
-        if not self.are_all_states_of_equal_values(ris_list):
-            raise ValueError("All RISs must have the same number of discrete states.")
+    Calculate the rotationally symmetric RIS radiation pattern for each element.
+    Using equation (3) from [Basar 2020].
+    An RIS with uniformly distributed elements is assummed which is positioned either on the xz or the yz planes.
 
+    :param N: The number of RIS elements. Must be a perfect square.
+    :param phi: The azimuth angle(s) of arrival between the TX or cluster and the RIS broadside
+    :param theta: The elevation angle(s) of arrival between the TX or cluster and the RIS broadside
+    :param element_spacing: Used to position elements in a grid
+    :return: The array responses for each element. If phi and theta are floats, then it is a 1D array of length N. Otherwise, if phi and theta are numpy arrays, the resulted array has a shape like them but expanded by one axis of size N.
+    """
 
+    assert ceil(sqrt(N)) == floor(sqrt(N)), 'N (number of RIS elements) must be a perfect square'
+    assert element_spacing > 0            , 'Spacing between elements must be a positive number'
+    if isinstance(phi, np.ndarray):
+        assert phi.shape == theta.shape     , 'arrays of azimuth and elevation angles must be of equal sizes'
 
+    d                   = element_spacing
+    element_coordinates = np.array(list(product(range(int(sqrt(N))), repeat=2))) + 1
+    x                   = element_coordinates[:,0]
+    y                   = element_coordinates[:,1]
 
-        total_tunable_elements        = sum([ris.num_tunable_elements for ris in ris_list])
-        dependent_elements_per_RIS    = ris_list[0].num_dependent_elements
-        discrete_states               = range(ris_list[0].state_space.num_values)
-        phase_space                   = ris_list[0].phase_space
-        combined_state_space_elements = int(len(discrete_states)) ** int(total_tunable_elements)
+    if isinstance(phi, np.ndarray):
+        extended_shape = phi.shape + tuple([len(x)])
+        x     = np.broadcast_to(x, extended_shape)
+        y     = np.broadcast_to(y, extended_shape)
+        theta = theta[..., np.newaxis]
+        phi   = phi[..., np.newaxis]
 
+    response = np.exp(1j * k * d * (x * sin(theta) + y * sin(phi) * cos(theta) ) )
 
-
-        num_transmissions             = combined_state_space_elements
-        K                             = sum([ris.total_elements for ris in ris_list])
-
-        ris_element_coordinates       = self.get_combined_elements_coordinates(ris_list)
-
-
-
-
-        num_batches_required = int(np.ceil(num_transmissions / batch_size))
-        last_batch_size      = batch_size if num_transmissions % batch_size == 0 else num_transmissions % batch_size
-
-        #possible_configurations = itertools.product(discrete_states, repeat=total_tunable_elements)
-        possible_configurations = BinaryEnumerator(batch_size, total_tunable_elements)
-
-        best_batch_results = []
-        best_batch_snrs    = np.empty(shape=(num_batches_required,))
-
-
-        batch_indices = range(num_batches_required)
-        if show_progress_bar: batch_indices = tqdm(batch_indices, leave=True)
-
-        for i in tqdm(batch_indices):
-
-            batch_transmissions  = batch_size if i != num_batches_required-1 else last_batch_size
-
-            #batch_configurations = [next(possible_configurations) for _ in range(batch_transmissions)]
-            batch_configurations = next(possible_configurations)
-
-            batch_phases = phase_space.calculate_phase_shifts(batch_configurations)
-            batch_phases = np.repeat(batch_phases, repeats=dependent_elements_per_RIS, axis=1)
-
-            # batch_phases = []
-            # for configuration in batch_configurations:
-            #     phase = phase_space.calculate_phase_shifts(configuration)
-            #     phase = np.repeat(phase, repeats=dependent_elements_per_RIS)
-            #     batch_phases.append(phase)
-            #
-            # batch_phases = np.array(batch_phases)
-
-            self.TX_RIS_link.initialize([self.tx_position], ris_element_coordinates)
-            self.RX_RIS_link.initialize(ris_element_coordinates, [self.rx_position])
-            self.TX_RX_link.initialize([self.tx_position], [self.rx_position])
+    if normalize_steering_vector:
+        response = 1/sqrt(N) * response
+    return response
 
 
-            try:
-                H   = np.empty(shape=(batch_transmissions, K, 1), dtype=np.complex)
-                G   = np.empty(shape=(batch_transmissions, 1, K), dtype=np.complex)
-                h   = np.empty(shape=(batch_transmissions, 1, 1), dtype=np.complex)
-                Phi = np.empty(shape=(batch_transmissions, K, K), dtype=np.complex)
+def general_channel_equation(l                       : float,
+                             dist                    : float,
+                             N                       : int=None,
+                             theta                   : float=None,
+                             phi                     : float=None,
+                             element_spacing         : float=None,
+                             wallExists              : bool=False,
+                             )->Union[complex, ComplexVector]:
+    """
+    Compute the channel coefficients from a general system model that includes both a LOS and an NLOS (RIS-assisted)
+    component. Depending on the value of l, it can model e Rayleigh, a Ricean, or a pure LOS channel.
 
-            except MemoryError as e:
-                required_memory = str(e).split("Unable to allocate ")[-1].split(" for an array")[0]
-                raise MemoryError("Each batch requires "+required_memory+" which exceeds system memory. Lower batch_size value and try again.")
+    :param l: Ratio between LOS and NLOS components. Use larger values for Rayleigh, smaller for Ricean, and 0 for Rayleigh.
+    :param dist: The distance (in m) between the transmitting and receiving nodes (to calculate pathloss).
+    :param N: Number of RIS elements. Can be ignored if no RIS is involved in the link.
+    :param theta: Elevation angle of arrival between the RIS and the transmitter/receiver. Ignored if `N` is None.
+    :param phi: Azimuth angle of arrival between the RIS and the transmitter/receiver. Ignored if `N` is None.
+    :param element_spacing: Used to position elements in a grid. Ignored if `N` is None.
+    :param wallExists: If `True`, induces further pathloss attenuation.
+    :return: The channel coefficient(s). If `N` is given, it is an `N`-sized vector, otherwise a float.
+    """
 
-            for j in range(batch_transmissions):
+    has_NLOS_component = (l != 0)
 
-                #transmission_index = i*batch_size+j
+    if has_NLOS_component:
+        Ge             = calculate_element_radiation(theta)
+        L_NLOS         = calculate_pathloss(dist, False, wallExists, not shadow_fading_exists)
+        NLOS_coeff     = sqrt(Ge * L_NLOS)
+        a              = calculate_array_response(N, phi, theta, element_spacing)
+        NLOS           = sqrt(l/(l+1)) * NLOS_coeff * a
+    else:
+        NLOS           = 0
 
-                H[j,:,:]   = self.TX_RIS_link.get_transmission_matrix()  # shape: (K,1)
-                G[j,:,:]   = self.RX_RIS_link.get_transmission_matrix()  # shape: (1,K)
-                h[j,:,:]   = self.TX_RX_link.get_transmission_matrix()   # shape: (1,1)
-                Phi[j,:,:] = np.diag(batch_phases[j,:])      # shape: (K,K)
-
-
-            all_snr = self._calculate_SNR(H, Phi, G, h).flatten() # type: np.ndarray
-            #all_snr = self._calculate_SNR(H, Phi, G).flatten()  # type: np.ndarray
-
-            best_configuration_index = np.argmax(all_snr)
-            snr                      = all_snr[best_configuration_index]
-
-            best_configuration       = batch_configurations[best_configuration_index]
-            angle_TX                 = np.angle( H[best_configuration_index, :, :])
-            mag_TX                   = np.abs(   H[best_configuration_index, :, :])
-            angle_RX                 = np.angle( G[best_configuration_index, :, :])
-            mag_RX                   = np.abs(   G[best_configuration_index, :, :])
+    if not ignore_LOS:
+        L_LOS              = calculate_pathloss(dist, True, wallExists, not shadow_fading_exists)
+        beta_shape         = N if has_NLOS_component else 1
+        beta               = np.random.normal(0, 1, size=beta_shape) + 1j * np.random.normal(0, 1, size=beta_shape)
+        LOS                = sqrt(1/(l+1)) * sqrt(L_LOS/2) * beta
+    else:
+        LOS                = 0
 
 
-            best_batch_results.append((best_configuration, snr, angle_TX, mag_TX, angle_RX, mag_RX, best_configuration_index))
-            best_batch_snrs[i] = snr
+    return LOS + NLOS
 
 
-        best_snr_index_from_batches = int(np.argmax(best_batch_snrs))
-        best_configuration, snr, angle_TX, mag_TX, angle_RX, mag_RX, best_configuration_index = best_batch_results[best_snr_index_from_batches]
 
-        return best_configuration, snr, angle_TX, mag_TX, angle_RX, mag_RX,
+def TX_RIS_channel_model(
+        N                     : int,
+        dist_TX_RIS           : float,
+        theta_RIS             : float,
+        phi_RIS               : float,
+        RIS_element_spacing   : float,
+        )->ComplexVector:
+
+    """
+    Calculate the TX-RIS channel (h) for a single RIS. This is equation (8) of [Basar 2020].
+
+    The channel is modeled as  Ricean distributed.
+
+    :param N                     Number of RIS elements (which is assumed to be a perfect square).
+    :param dist_TX_RIS:          The Line of Sight distance between the TX and the RIS' broadside
+    :param theta_RIS:            A vector of length N where the n-th element is the elevation angle of arrival between the TX and the RIS
+    :param phi_RIS:              A vector of length N where the n-th element is the azimuth angle of arrival between the TX and the RIS
+    :param RIS_element_spacing:  The distance between consecutive RIS elements (assumed to be the same both vertically and horizontally)
+
+    :return:                     The RIS-RX channel coefficients, g, - a complex vector of size N
+    """
+
+    h = general_channel_equation(l_h, dist_TX_RIS, N, theta_RIS, phi_RIS, RIS_element_spacing, wallExists=False)
+    assert len(h) == N
+    return h
+
+
+
+
+def RIS_RX_channel_model(
+        N                     : int,
+        dist_RIS_RX           : float,
+        theta_RIS_RX          : float,
+        phi_RIS_RX            : float,
+        RIS_element_spacing   : float,
+    )->ComplexVector:
+
+    """
+    Calculate the RIS-RX channel (h) for a single RIS. This is equation (8) of [Basar 2020].
+
+    The channel is modeled as a clear LOS link without NLOS components in between.
+    That is, the assumption that the RX and the RIS are sufficiently close.
+    This channel is modeled as a Rayleigh faded indoor channel at 5G frequencies.
+
+    :param N                     Number of RIS elements (which is assumed to be a perfect square).
+    :param dist_RIS_RX:          The Line of Sight distance between the TX and the RIS' broadside
+    :param theta_RIS_RX:         A vector of length N where the n-th element is the elevation angle of arrival between the RIS and the RX
+    :param phi_RIS_RX:           A vector of length N where the n-th element is the azimuth angle of arrival between the RIS and the RX
+    :param RIS_element_spacing:  The distance between consecutive RIS elements (assumed to be the same both vertically and horizontally)
+
+    :return:                     The RIS-RX channel coefficients, g, - a complex vector of size N
+    """
+
+    g = general_channel_equation(l_g, dist_RIS_RX, N, theta_RIS_RX, phi_RIS_RX, RIS_element_spacing, wallExists=False)
+    assert len(g) == N
+    return g
+
+
+
+
+def TX_RX_channel_model(TX_RX_distance, wall_exists):
+    h_SISO = general_channel_equation(l_SISO, TX_RX_distance, N=None, wallExists=wall_exists)
+
+    h_SISO *= TX_RX_mult_factor
+
+    return h_SISO
+
+
+
+
+
+
+
+def calculate_H(ris_list: List[RIS], TX_location):
+
+    K = sum([ris.total_elements for ris in ris_list])
+    H = []
+
+    for i, ris in enumerate(ris_list):
+        dist_TX_RIS              = np.linalg.norm(TX_location - ris.position)
+        theta_RIS_TX, phi_RIS_TX = ray_to_elevation_azimuth(TX_location, ris.position)
+        h                        = TX_RIS_channel_model(ris.total_elements, dist_TX_RIS, theta_RIS_TX,
+                                                        phi_RIS_TX, element_spacing )
+        H.append(h)
+
+    H = np.array(H).reshape((K, 1))
+    return H
+
+
+
+
+
+def calculate_G_and_h0(ris_list: List[RIS],
+                       TX_location,
+                      RX_location,):
+
+    TX_location = TX_location.reshape(1, 3)
+    K           = sum([ris.total_elements for ris in ris_list])
+    G           = []
+
+
+    for i, ris in enumerate(ris_list):
+
+        dist_RIS_RX              = np.linalg.norm(RX_location - ris.position)
+        theta_RIS_RX, phi_RIS_RX = ray_to_elevation_azimuth(ris.position, RX_location)
+        g                        = RIS_RX_channel_model(ris.total_elements, dist_RIS_RX, theta_RIS_RX, phi_RIS_RX,
+                                                        element_spacing)
+        G.append(g)
+
+    TX_RX_distance = np.linalg.norm(TX_location - RX_location)
+    h_SISO         = TX_RX_channel_model(TX_RX_distance, wall_exists=True)
+
+    G              = np.array(G).reshape(1, K)
+    h0             = np.array(h_SISO).reshape((1, 1))
+
+    return G, h0
+
+

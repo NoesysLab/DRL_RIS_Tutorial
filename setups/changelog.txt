@@ -1,0 +1,10 @@
+Version:
+
+
+
+...
+
+3.0.4 : Added `TX_RX_mult_factor` in [channel_modeling]
+3.0.5 : Added `average_over_runs` in [exhaustive_search]
+3.0.6 : Added `pathloss_db_sign`  in [channel_modeling]
+3.0.7 : Added `units_scale`       in [channel_modeling]

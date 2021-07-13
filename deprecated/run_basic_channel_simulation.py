@@ -1,12 +1,8 @@
 import numpy as np
-from scipy import stats
-from tqdm import tqdm
 
-from core.setup import Setup, initialize_simulation_from_setup
-from core.surfaces import RIS
-from core.channels import Channel, RayleighFadeLink
-from scripts.exaustive_search_tensorflow import exhaustive_snr_search
-from utils.plotting import plot_positions
+from deprecated.setup import Setup, initialize_simulation_from_setup
+from deprecated.channels import Channel
+from deprecated import exhaustive_snr_search
 
 from datetime import datetime
 import matplotlib.pyplot as plt
@@ -21,7 +17,7 @@ if __name__ == '__main__':
     dh           = 20
     x1 = x2 = y1 = 25
     y2           = 35
-    isWall       = False
+    isWall       = True
     Power        = 1
 
     setup = Setup.from_config({'test': {
@@ -47,15 +43,26 @@ if __name__ == '__main__':
     RX_RIS_link_info, \
     TX_RX_link_info, \
     train_RX_locations, \
-    test_RX_locations = initialize_simulation_from_setup(setup)
+    test_RX_locations, \
+    center_TX_position = initialize_simulation_from_setup(setup)
 
+    from utils.plotting import plot_setup_3D, plot_positions, grid_plot_params
+
+
+
+    params = grid_plot_params.copy()
+    params['zlims'] = [0, 3]
+    params['color_by_height'] = False
+    plot_setup_3D(RIS_list, setup.TX_locations.reshape((1,3)), center_TX_position.reshape(1,3), params=params)
+
+    plot_positions(np.array([ris.position for ris in RIS_list]), setup.TX_locations.reshape((1, 3)), center_TX_position.reshape(1, 3),)
+
+    plt.show()
 
     for i in [1]:#tqdm(range(train_RX_locations.shape[0])):
 
         ch = Channel(setup.TX_locations, train_RX_locations[i,:], TX_RIS_link_info, RX_RIS_link_info, TX_RX_link_info, setup.noise_power)
-
-        #best_configuration, best_snr, _, _, _, _, = ch.exhaustive_snr_search(RIS_list, batch_size=2 ** 11, show_progress_bar=False)
-        best_configuration, best_snr, _, _, _, _, = exhaustive_snr_search(ch, RIS_list, batch_size=2 ** 11, show_progress_bar=False)
+        best_configuation, best_snr, _, _, _, _, =  exhaustive_snr_search(ch, RIS_list, batch_size=2 ** 11, show_progress_bar=False) #ch.exhaustive_snr_search(RIS_list, batch_size=2 ** 11, show_progress_bar=False)
 
 
 

@@ -139,9 +139,14 @@ def from_ascii(ascii_grid: str,
 
 
 def get_random_2D_positions_on_square(num_positions: int, xy_center: Tuple[float,float], width: float, z_value:Union[float,Iterable]=None)->Matrix3DCoordinates:
-    positions        = np.empty(shape=(num_positions, 3))
-    positions[:,0:2] = np.random.random((num_positions, 2))
-    positions[:,2]   = z_value
+    x_low            = xy_center[0] - width / 2
+    x_high           = xy_center[0] + width / 2
+    y_low            = xy_center[1] - width / 2
+    y_high           = xy_center[1] + width / 2
+    positions        = np.zeros(shape=(num_positions, 3))
+    positions[:, 0]  = np.random.uniform(low=x_low, high=x_high, size=num_positions)
+    positions[:, 1]  = np.random.uniform(low=y_low, high=y_high, size=num_positions)
+    positions[:, 2]  = z_value
     return positions
 
 def get_2D_positions_on_square_grid(num_positions: int, xy_center: Tuple[float,float], width: float, z_value:Union[float,Iterable]=None)->Matrix3DCoordinates:
@@ -159,7 +164,7 @@ def get_2D_positions_on_square_grid(num_positions: int, xy_center: Tuple[float,f
 
     X, Y                = np.meshgrid(xs, ys)
 
-    positions_grid      = np.empty(shape=(num_positions, 3 if z_value is not None else 2))
+    positions_grid      = np.empty(shape=(num_x_positions*num_y_positions, 3 if z_value is not None else 2))
     positions_grid[:,0] = X.flatten()
     positions_grid[:,1] = Y.flatten()
 
@@ -170,10 +175,31 @@ def get_2D_positions_on_square_grid(num_positions: int, xy_center: Tuple[float,f
 
 
 
-def get_receiver_positions(placement_type: str, num_positions: int, xy_center: Tuple[float,float], width: float, z_value:Union[float,Iterable]=None)->Matrix3DCoordinates:
+def get_receiver_positions(placement_type:str,
+                           num_positions: int,
+                           xy_center: Tuple[float,float],
+                           width: float,
+                           z_value:Union[float,Iterable]=None
+                           )->Matrix3DCoordinates:
     if placement_type == 'grid':
         return get_2D_positions_on_square_grid(num_positions, xy_center, width, z_value)
     elif placement_type == 'random':
         return get_random_2D_positions_on_square(num_positions, xy_center, width, z_value)
     else:
         raise ValueError("Only supporting 'grid' or 'random' placement types.")
+
+
+
+
+
+def rotate(xy, ang):
+    coords = np.array(xy).reshape((2,1))
+    R      = np.array([[np.cos(ang), -np.sin(ang)],
+                     [np.sin(ang),  np.cos(ang)]])
+
+    return (R @ coords).reshape(xy.shape)
+
+
+
+def rotate_along_coords(xy, xy_base, ang_rad):
+    return rotate(xy-xy_base, ang_rad)+xy_base
