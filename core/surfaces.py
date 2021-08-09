@@ -335,7 +335,7 @@ class RIS:
     def get_element_coordinates(self)->Matrix3DCoordinates:
         """
         Get all coordinates of the elements of the grid of the RIS.
-        :return: Array of shape (num_elements, 3) where each row is the x,y,z coordinates for each element
+        :return: dcArray of shape (num_elements, 3) where each row is the x,y,z coordinates for each element
         """
         return self.element_coordinates
 

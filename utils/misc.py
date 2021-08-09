@@ -67,7 +67,7 @@ def expand_array(a: np.ndarray, group_size: Tuple[int,int]):
 def condense_array(a: np.ndarray, group_size: Tuple[int, int]):
 
     if (a.shape % np.array(group_size)).sum() != 0:
-        raise ValueError("Array shape not divisible by group sizes")
+        raise ValueError("dcArray shape not divisible by group sizes")
 
     row_indices = list(range(0, a.shape[0], group_size[0]))
     col_indices = list(range(0, a.shape[1], group_size[1]))
