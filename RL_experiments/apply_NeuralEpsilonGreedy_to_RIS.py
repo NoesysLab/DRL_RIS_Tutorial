@@ -14,7 +14,7 @@ tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 
 from RL_experiments.test_environment import TestEnv
 from utils.custom_configparser import CustomConfigParser
-from RL_experiments.environments import RISEnv2
+from RL_experiments.environments import RISEnv2, compute_average_optimal_policy_return
 from RL_experiments.training import NeuralEpsilonGreedyAgent, NeuralEpsilonGreedyParams, \
     initialize_NeuralEpsilonGreedyAgent, train_bandit_agent, \
     plot_training_performance, evaluate_agent, plot_loss, compute_avg_return, save_results
@@ -31,7 +31,7 @@ setup1 = Setup(**params['SETUP'])
 agentParams = NeuralEpsilonGreedyParams(**params['NEURAL_EPSILON_GREEDY_PARAMS'])
 
 
-env = RISEnv2(setup1, episode_length=1) #RIS_TFenv(config, 1, transmit_SNR=1)
+env = RISEnv2(setup1, episode_length=np.inf) #RIS_TFenv(config, 1, transmit_SNR=1)
 
 
 
@@ -44,6 +44,8 @@ train_env     = tf_py_environment.TFPyEnvironment(env)
 random_policy = random_tf_policy.RandomTFPolicy(train_env.time_step_spec(), train_env.action_spec())
 
 
+optimal_score = compute_average_optimal_policy_return(env, timesteps=500)
+print(f"Score of optimal policy: {optimal_score}\n")
 
 
 agent = initialize_NeuralEpsilonGreedyAgent(agentParams, train_env)

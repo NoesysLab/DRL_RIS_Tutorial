@@ -1,5 +1,8 @@
+import itertools
 import sys
 from typing import Any
+
+from tqdm import tqdm
 
 from RL_experiments.standalone_simulatiion import Setup, compute_sum_rate, compute_SINR_per_user, simulate_transmission, \
     construct_precoding_matrix
@@ -182,6 +185,8 @@ class RISEnv2(py_environment.PyEnvironment):
         self.num_RIS_configurations      = None
         self.codebook_size_bits_required = None
 
+        self._state = None
+
         action_dim, observation_dim = self._calculate_space_dimensions()
 
         self._action_spec = array_spec.BoundedArraySpec(shape=(),
@@ -310,8 +315,9 @@ class RISEnv2(py_environment.PyEnvironment):
         self._episode_ended = False
         self._prev_configuration = np.zeros(shape=self._observation_spec.shape, dtype=np.float32)
         H, G, h = simulate_transmission(self.setup)
-        state = self.generate_observation_vector(H, G, h)
-        return ts.restart(state)
+        self._state = (H, G, h)
+        obs = self.generate_observation_vector(H, G, h)
+        return ts.restart(obs)
 
     def _step(self, action):
         if self._episode_ended:
@@ -320,13 +326,16 @@ class RISEnv2(py_environment.PyEnvironment):
         codebook_selection, configuration = self.split_action_to_precoding_and_RIS_profile(action)
 
 
-        H, G, h       = simulate_transmission(self.setup)
+
         #configuration = self.action_2_configuration(action)
         configuration = self.extend_configuration_to_groups(configuration)
         Phi           = self.configuration2phases(configuration)
         W             = self.select_beamforming_matrix(codebook_selection)
+        H, G, h       = self._state
         reward        = self.compute_reward(H, G, h, Phi, W)
+        H, G, h       = simulate_transmission(self.setup)
         observation   = self.generate_observation_vector(H, G, h)
+        self._state   = (H, G, h)
         self._t      += 1
 
         if self.episode_length is not None and self._t >= self.episode_length:
@@ -338,6 +347,54 @@ class RISEnv2(py_environment.PyEnvironment):
 
     def get_info(self) -> Any:
         raise NotImplemented
+
+
+# -------------------------------------------------------------
+
+
+def compute_average_optimal_policy_return(env: RISEnv2, timesteps=1000):
+
+    total_return = 0
+    _ = env._reset()
+
+
+    for _ in tqdm(range(timesteps)):
+        r_max  = -float('inf')
+        a_best = -1
+        (H, G, h) = env._state
+        for a in range(env.action_spec().maximum):
+            codebook_selection, configuration = env.split_action_to_precoding_and_RIS_profile(a)
+            configuration                     = env.extend_configuration_to_groups(configuration)
+            Phi                               = env.configuration2phases(configuration)
+            W                                 = env.select_beamforming_matrix(codebook_selection)
+            r                                 = env.compute_reward(H, G, h, Phi, W)
+            if r > r_max:
+                r_max, a_best = r, a
+
+        total_return += r_max
+        _ = env._step(a_best)
+
+    return total_return / timesteps
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 # -------------------------------------------------------------------
@@ -353,7 +410,12 @@ class BanditWrapper:
 
 
 
+
+
+
 if __name__ == '__main__':
-    setup = Setup()
-    env = RISEnv2(setup, 10)
-    env._step(131072+3)
+    setup = Setup.load_from_json("./parameters.json")
+    env = RISEnv2(setup, 1)
+
+    score = compute_average_optimal_policy_return(env, 1000)
+    print(f"Optimal policy avg return: {score}")

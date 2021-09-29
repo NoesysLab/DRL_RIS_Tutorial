@@ -25,7 +25,7 @@ from tf_agents.trajectories import time_step as ts
 from tf_agents.bandits.agents.neural_epsilon_greedy_agent import NeuralEpsilonGreedyAgent
 from tf_agents.networks import network
 from scipy.interpolate import make_interp_spline, BSpline
-
+import seaborn as sns
 from scipy.ndimage.filters import gaussian_filter1d
 import pandas as pd
 
@@ -546,29 +546,30 @@ def plot_loss(loss_values, agent_name, scale='linear', figsize=(16,9), smooth_si
     plt.show()
 
 
-def plot_training_performance(reward_values, it_cnt, rolling_window='unused', name=None, random_avg_reward=None, smooth_sigma=None):
+def plot_training_performance(reward_values, iteration_timesteps, name=None, random_avg_reward=None, optimal_avg_reward=None, smooth_sigma=None):
+    sns.set_theme()
 
     name = name if name is not None else 'Trained agent'
 
-    x = range(len(reward_values))
 
-    plt.plot(x, reward_values, alpha=.7, label=name)
-
-
+    plt.plot(iteration_timesteps, reward_values, alpha=.7, label=name)
 
     if random_avg_reward is not None:
-        plt.hlines([random_avg_reward], 0, it_cnt, color='k', ls=':', label='random policy')
+        plt.hlines([random_avg_reward], 0, iteration_timesteps[-1], color='grey', ls=':', label='random policy')
+
+    if optimal_avg_reward is not None:
+        plt.hlines([optimal_avg_reward], 0, iteration_timesteps[-1], color='k', ls='--', label='optimal policy')
 
 
     if smooth_sigma is not None:
         ysmoothed = gaussian_filter1d(reward_values, sigma=smooth_sigma)
-        plt.plot(x, ysmoothed, label=f'{name} (smoothed)')
+        plt.plot(iteration_timesteps, ysmoothed, label=f'{name} (smoothed)')
 
     plt.legend()
 
     plt.ylabel('Reward')
     plt.xlabel('Number of Iterations')
-    plt.show()
+    plt.show(block=False)
 
 
 
@@ -579,11 +580,7 @@ def save_results(agent_name            : str,
                  agentParams           : dict,
                  reward_list           : list,
                  eval_steps            : list,
-                 final_avg_reward      : float,
-                 final_std_reward      : float,
-                 baseline_reward       : float,
-                 score_as_percentage_of_baseline : float,
-                 training_score_as_percentage_of_random : float,
+                 results_dict          : dict,
                  setup_dirname_params  : str,
                  agent_dirname_params  : str,
                  results_rootdir        = './results/',
@@ -615,13 +612,7 @@ def save_results(agent_name            : str,
         fout.write(json.dumps(agentParams, indent=4))
 
     with open(os.path.join(results_rootdir, setup_dirname, agent_dirname, 'agent_performance.json'), 'w') as fout:
-        fout.write(json.dumps({
-            'final_avg_reward' : final_avg_reward,
-            'final_std_reward' : final_std_reward,
-            'baseline_reward'  : baseline_reward,
-            'score_as_percentage_of_baseline' : score_as_percentage_of_baseline,
-            'training_score_as_percentage_of_random' : training_score_as_percentage_of_random,
-        }, indent=4))
+        fout.write(json.dumps(results_dict, indent=4))
 
     with open(os.path.join(results_rootdir, setup_dirname, agent_dirname, 'agent_training.csv'), 'w') as fout:
         pd.DataFrame({

@@ -5,6 +5,8 @@ from scipy.constants import pi, speed_of_light
 from dataclasses import dataclass, field
 import json
 
+from tqdm import tqdm
+
 dcArray = lambda X: field(default=np.array(X))
 
 SPEED_OF_LIGHT_AIR = 299702547.0
@@ -375,7 +377,7 @@ def example_main():
 
     avg_sum_rate = 0.0
     RUNS         = 1000
-    for run in range(RUNS):
+    for run in tqdm(range(RUNS)):
         thetas       = np.random.choice(setup.RIS_phases, size=(setup.M, setup.N))                   # Create a random RIS state (binary vector)
         RIS_profiles = RIS_state2profile(thetas)                                                     # Convert it to proper RIS profile
         H, G, h      = simulate_transmission(setup)                                                  # Sample channel realizations
