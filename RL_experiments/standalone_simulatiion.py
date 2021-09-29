@@ -1,7 +1,9 @@
+import sys
+
 import numpy as np
 from scipy.constants import pi, speed_of_light
 from dataclasses import dataclass, field
-
+import json
 
 dcArray = lambda X: field(default=np.array(X))
 
@@ -14,35 +16,41 @@ SPEED_OF_LIGHT_AIR = 299702547.0
 class Setup:
     """
     Parameters of the Setup to be used.
+    Attributes with no default values must be set explicitly whc constructing the class
+    Attributes set to value `field(init=False)` will have their value set in __post__init__() method using values from other parameters
+    An instance of this class can be created using the `load_from_json()` method from a JSON file that contains the parameter values.
     """
 
-    K                          : int        = 3                                               # Number of users
-    S                          : int        = 10                                              # Number of BS antennas
-    M                          : int        = 2                                               # Number of RIS
-    N                          : int        = 32                                               # Number of RIS elements
-    N_tot                      : int        = field(init=False)                               # Total number of RIS elements
-    group_size                 : int        = 4                                              # Size of RIS element groups that share the same configuration. Must be a divisor of N.
-    N_controllable             : int        = field(init=False)                               # Total number of RIS element groups, calculated as N_tot / group_size. This can be thought of as the number of individually controlled elements.
-    kappa_H                    : float      = 5.                                              # BS-RIS Ricean factor (dB)
-    kappa_G                    : float      = 13.                                             # RIS-RX Ricean factor (dB)
-    frequency                  : float      = 32*10**9                                        # Operating frequency (Hz)
-    wavelength                 : float      = field(init=False)                               # wavelength (m)
-    elem_dist                  : float      = field(default='wavelength')                     # distance between elements in RIS
-    RIS_resolution             : int        = 2
-    num_RIS_phases             : int        = field(init=False)
+    K                          : int                                       # Number of users
+    B                          : int                                       # Number of BS antennas
+    M                          : int                                       # Number of RIS
+    N                          : int                                       # Number of RIS elements
+    transmit_power             : float                                     # (dBm)
+    noise_variance             : float                                     # Variance of the AWGN - assumed equal for all RXs (dBm)
+    codebook_rays_per_RX       : int
+    group_size                 : int                                       # Size of RIS element groups that share the same configuration. Must be a divisor of N.
+    N_controllable             : int                                       # Total number of RIS element groups, calculated as N_tot / group_size. This can be thought of as the number of individually controlled elements.
+    kappa_H                    : float                                     # BS-RIS Ricean factor (dB)
+    kappa_G                    : float                                     # RIS-RX Ricean factor (dB)
+    BS_position                : np.ndarray = dcArray([10, 5 , 2.0])
+    RIS_positions              : np.ndarray = dcArray([[7.5, 13, 2.0], [12.5,  13,    2.0]])
+    RX_box                     : np.ndarray = dcArray([ [7.5, 11.0, 1.5],  [12.5,  16.0, 2.0] ])
+    direct_link_attenuation    : float      = None
+    observation_noise_variance : float      = 0.
+    ignore_direct_link         : bool       = False
     RIS_phases                 : np.ndarray = dcArray([0, pi])
-    precoding_v                : np.ndarray = field(default='ones')
-    noise_variance             : float      = 100.                                             # Variance of the AWGN - assumed equal for all RXs (dBm)
-    transmit_power             : float      = 1                                                # (Watt)
-    BS_position                : np.ndarray = dcArray([10, 0 , 2.])
-    RIS_positions              : np.ndarray = dcArray([[5, 25, 2.], [15, 25, 2.]])
-    RX_box                     : np.ndarray = dcArray([[5., 20., 1.], [15., 30., 2.]])
+    elem_dist                  : float      = field(default='wavelength')  # distance between elements in RIS
+    RIS_resolution             : int        = 2
+    frequency                  : float      = 5*10**9                      # Operating frequency (Hz)
+    wavelength                 : float      = field(init=False)            # wavelength (m)
+    num_RIS_phases             : int        = field(init=False)
+    codebook                   : np.ndarray = field(init=False)            # Codebook of precoding matrices. Shape: (rays_per_user, B, K)
+    N_tot                      : int        = field(init=False)            # Total number of RIS elements
     RX_positions               : np.ndarray = field(init=False)
-    d_BS_RIS                   : np.ndarray = field(init=False)                               # Shape: (M,)
-    d_RIS_RX                   : np.ndarray = field(init=False)                               # Shape: (M, K)
-    d_BS_RX                    : np.ndarray = field(init=False)                               # Shape: (K)
-    direct_link_attenuation    : float = None
-    observation_noise_variance : float = 0.
+    d_BS_RIS                   : np.ndarray = field(init=False)            # Shape: (M,)
+    d_RIS_RX                   : np.ndarray = field(init=False)            # Shape: (M, K)
+    d_BS_RX                    : np.ndarray = field(init=False)            # Shape: (K)
+
 
 
     def __post_init__(self):
@@ -53,27 +61,48 @@ class Setup:
             raise ValueError('Size of RIS element groups must divide perfectly the number of elements in a RIS.')
 
         self.N_tot          = self.N * self.M
-        self.N_controllable = self.N_tot // self.group_size
+
         self.wavelength     = speed_of_light / self.frequency
         self.num_RIS_phases = 2 ** self.RIS_resolution
         self.elem_dist      = self.wavelength if self.elem_dist == 'wavelength' else self.elem_dist
-        self.precoding_v    = np.ones(self.S) if self.precoding_v == 'ones' else self.precoding_v
-
-        self.precoding_v    = 1/np.linalg.norm(self.precoding_v)*self.precoding_v
-
-
         self.RX_positions   = get_random_RX_positions(self.K, self.RX_box[0, :], self.RX_box[1, :])
         self.d_BS_RIS       = calculate_distances(self.BS_position,   self.RIS_positions).flatten()
         self.d_RIS_RX       = calculate_distances(self.RIS_positions, self.RX_positions)  
         self.d_BS_RX        = calculate_distances(self.BS_position,   self.RX_positions).flatten()
-        
         self.kappa_H        = dBW_to_Watt(self.kappa_H)
         self.kappa_G        = dBW_to_Watt(self.kappa_G)
-        #self.transmit_power   = dBW_to_Watt(self.transmit_power)
+        self.transmit_power = dBm_to_Watt(self.transmit_power)
         self.noise_variance = dBm_to_Watt(self.noise_variance)
+        self.BS_position    = np.array(self.BS_position)
+        self.RIS_positions  = np.array(self.RIS_positions)
+        self.RX_box         = np.array(self.RX_box)
 
         # if self.direct_link_attenuation is not None:
         #     self.direct_link_attenuation = dBW_to_Watt(-1 * self.direct_link_attenuation)
+        self.codebook      = initialize_precoding_codebook(self)
+
+        if self.N_controllable is None:
+            self.N_controllable = self.N_tot // self.group_size
+        else:
+            assert self.N_controllable == self.N_tot // self.group_size
+
+
+    @staticmethod
+    def load_from_json(file_or_filename: str):
+        if isinstance(file_or_filename, str):
+            file = open(file_or_filename, 'r')
+        else:
+            file = file_or_filename
+
+        setup_params = json.loads(file.read())
+        try:
+            setup = Setup(**setup_params['SETUP'])
+            file.close()
+            return setup
+        except TypeError as e:
+            file.close()
+            raise ValueError(f"Unable to initialize setup from JSON file. Error:\n{e}")
+
 
 
 
@@ -95,8 +124,6 @@ def get_random_RX_positions(num_RXs, box_low, box_high):
 
 def calculate_distances(A: np.ndarray, B: np.ndarray)->np.ndarray:
 
-    both_are_1D = (A.ndim == 1 and B.ndim == 1)
-
     if A.ndim == 1: A = A.reshape((1,-1))
     if B.ndim == 1: B = B.reshape((1,-1))
 
@@ -108,10 +135,6 @@ def calculate_distances(A: np.ndarray, B: np.ndarray)->np.ndarray:
         a = A[i,:]
         dists[i,:] = np.linalg.norm(a - B)
 
-    # if both_are_1D:
-    #     return np.squeeze(dists, axis=1)
-    # else:
-    #     return np.squeeze(dists, axis=1)
     return dists
 
 def sample_gaussian_standard_normal(size=None):
@@ -184,19 +207,22 @@ def calculate_array_response(setup: Setup, num_RIS_elements: int, RIS_position: 
     x             = coords[:,0]
     y             = coords[:,1]
     a             = np.exp(1j * k * d * (x * np.sin(theta) + y * np.sin(phi) * np.cos(theta)) )
+    a             = a/np.linalg.norm(np.absolute(a))
 
     return a
 
 
 
 def calculate_H(setup: Setup, BS_position, RIS_position, dist_BS_RIS):
-    pl             = calculate_pathloss(setup, dist_BS_RIS)
-    LOS_component  = np.sqrt(setup.kappa_H/(setup.kappa_H+1)) * calculate_array_response(setup, setup.N, RIS_position, BS_position, direction_wrt_RIS='arrival')
-    LOS_component  = np.tile(LOS_component, (setup.S, 1))                         # Make array to (S,N) to account for multiple antennas
-    NLOS_component = np.sqrt(1/(setup.kappa_H+1)) * sample_gaussian_standard_normal(size=(setup.S, setup.N))
-    H              = np.sqrt(pl) * ( LOS_component + NLOS_component )
+    pl                  = calculate_pathloss(setup, dist_BS_RIS)
+    RIS_steering_vector = calculate_array_response(setup, setup.N, RIS_position, BS_position, direction_wrt_RIS='arrival')
+    BS_steering_vector  = calculate_array_response(setup, setup.B, setup.BS_position, RIS_position, direction_wrt_RIS='departure')
+    a                   = BS_steering_vector.reshape((setup.B, 1)) @ RIS_steering_vector.reshape((1, setup.N))
+    LOS_component       = np.sqrt(setup.kappa_H/(setup.kappa_H+1)) * a
+    NLOS_component      = np.sqrt(1/(setup.kappa_H+1)) * sample_gaussian_standard_normal(size=(setup.B, setup.N))
+    H                   = np.sqrt(pl) * ( LOS_component + NLOS_component )
 
-    assert H.shape[0] == setup.S and H.shape[1] == setup.N
+    assert H.shape[0] == setup.B and H.shape[1] == setup.N
     return H
 
 
@@ -212,16 +238,20 @@ def calculate_G(setup: Setup, RIS_position, RX_position, dist_RIS_RX):
 def calculate_h(setup : Setup, dist_TX_RX):
     pathloss = calculate_pathloss(setup, dist_TX_RX, extra_attenuation_dB=setup.direct_link_attenuation)
 
-    h =  np.sqrt(pathloss) * sample_gaussian_standard_normal(size=setup.S)
-    assert h.shape[0] == setup.S
+    h =  np.sqrt(pathloss) * sample_gaussian_standard_normal(size=setup.B)
+    assert h.shape[0] == setup.B
+
+    if setup.ignore_direct_link:
+        h = np.zeros(shape=(setup.B,), dtype=complex)
+
     return h
 
 
 def simulate_transmission(setup):
 
-    H = np.empty(shape=(setup.M, setup.S, setup.N), dtype=complex)
+    H = np.empty(shape=(setup.M, setup.B, setup.N), dtype=complex)
     G = np.empty(shape=(setup.M, setup.K, setup.N), dtype=complex)
-    h = np.empty(shape=(setup.K, setup.S),          dtype=complex)
+    h = np.empty(shape=(setup.K, setup.B), dtype=complex)
 
 
     for m in range(setup.M):
@@ -237,22 +267,20 @@ def simulate_transmission(setup):
 
 
 def compute_SINR_per_user(setup: Setup,
-                          noise_variance,
                           H,
                           G,
                           h,
                           RIS_profiles,
-                          precoding_vector):
+                          precoding_matrix):
     """
     Compute the SNR observed at every receiver
 
     :param setup
-    :param noise_variance: In watt
-    :param H: (M, S, N)
+    :param H: (M, B, N)
     :param G: (M, K, N)
-    :param h: (K, S)
+    :param h: (K, B)
     :param RIS_profiles: (M, N)
-    :param precoding_vector: (N,)
+    :param precoding_matrix: (B, K)
     :return: (K,)
     """
 
@@ -264,9 +292,9 @@ def compute_SINR_per_user(setup: Setup,
         Phi[m, :, :] = np.diag(RIS_profiles[m,:])
 
     for k in range(setup.K):
-        total_RIS_cascaded_channel = np.zeros(setup.S, dtype=complex)
+        total_RIS_cascaded_channel = np.zeros(setup.B, dtype=complex)
         for m in range(setup.M):
-            H_m   = H[m,:,:]    # (S, N)
+            H_m   = H[m,:,:]    # (B, N)
             Phi_m = Phi[m,:,:]  # (N, N)
             G_m   = G[m,k,:]    # (N, )
             G_m   = G_m.reshape((setup.N, 1))
@@ -274,7 +302,7 @@ def compute_SINR_per_user(setup: Setup,
             total_RIS_cascaded_channel += this_RIS_cascaded_channel.flatten()
 
 
-        signal_strength = np.dot(h[k] + total_RIS_cascaded_channel, precoding_vector)
+        signal_strength = np.dot(h[k] + total_RIS_cascaded_channel, precoding_matrix[:,k])
         signal_strength = np.absolute(signal_strength) ** 2
         signal_strength = signal_strength.real
 
@@ -283,7 +311,7 @@ def compute_SINR_per_user(setup: Setup,
     sum_signal_strengths = np.sum(signal_strenghts)
     SINR = np.zeros(setup.K)
     for k in range(setup.K):
-        SINR[k] = signal_strenghts[k] / (noise_variance + sum_signal_strengths - signal_strenghts[k])
+        SINR[k] = signal_strenghts[k] / (sum_signal_strengths - signal_strenghts[k]  + (setup.K * setup.noise_variance/ setup.transmit_power) )
 
     return SINR
 
@@ -297,25 +325,71 @@ def RIS_state2profile(theta):
 
 
 
+#  # # # # # # # # # # # # # # Precoding matrix # # # # # # # #  # # # # # # # #
+
+# def ULA_steering_vector(N, lam, theta, element_spacing):
+#     n = np.arange(N)
+#     return np.exp(-1j * 2 * pi * n * element_spacing * np.cos(theta) / lam )
+#
+
+
+
+def construct_precoding_matrix(setup: Setup, steering_vector_positions: np.ndarray) -> np.ndarray:
+    """
+    Given an array of L positions, a precoding matrix of shape (L,B) will be produced
+    that contains at each l row the ULA steering vector to the l position
+    :param setup: the Simulation setup. wavelength and element spacing for ULA will be set equivalent to the ones used for the RIS profile.
+    :param steering_vector_positions: An array of coordinates of shape (L,3)
+    :return:
+    """
+    assert steering_vector_positions.shape[1] == 3
+
+    L = steering_vector_positions.shape[0]
+
+    W = np.empty((setup.B, L), dtype=complex)
+    for l in range(L):
+        W[:,l]   = calculate_array_response(setup, setup.B, setup.BS_position, steering_vector_positions[l, :], 'departure')
+
+    return W
+
+
+def initialize_precoding_codebook(setup):
+
+    codebook = np.empty((setup.codebook_rays_per_RX, setup.B, setup.K), dtype=complex)
+
+    for i in range(setup.codebook_rays_per_RX):
+        steering_positions = np.empty((setup.K, 3))
+        for k in range(setup.K):
+            steering_positions[k,:] = np.random.uniform(low=setup.RX_box[0,:], high=setup.RX_box[1,:])
+
+        W = construct_precoding_matrix(setup, steering_positions)
+        codebook[i,:,:] = W
+
+    return codebook
 
 
 
 
+def example_main():
+    setup        = Setup.load_from_json("./parameters.json")                                     # Load setup parameters from configuration file
 
-def _main():
-    setup        = Setup()
+    avg_sum_rate = 0.0
+    RUNS         = 1000
+    for run in range(RUNS):
+        thetas       = np.random.choice(setup.RIS_phases, size=(setup.M, setup.N))                   # Create a random RIS state (binary vector)
+        RIS_profiles = RIS_state2profile(thetas)                                                     # Convert it to proper RIS profile
+        H, G, h      = simulate_transmission(setup)                                                  # Sample channel realizations
+        W            = setup.codebook[0,:,:]                                                         # Set the precoding matrix to be the first ray for each RX
+        SINRs        = compute_SINR_per_user(setup, H, G, h, RIS_profiles, W)
+        sum_rate     = compute_sum_rate(SINRs)
+        avg_sum_rate+= sum_rate
 
-    thetas       = np.random.choice(setup.RIS_phases, size=(setup.M, setup.N))
-    RIS_profiles = RIS_state2profile(thetas)
-    H, G, h      = simulate_transmission(setup)
-    SINR         = compute_SINR_per_user(setup, setup.noise_variance, H, G, h, RIS_profiles, setup.precoding_v)
-    sum_rate     = compute_sum_rate(SINR)
-
-    print(f"Sum rate: {sum_rate}")
+    avg_sum_rate /= RUNS
+    print(f"Average sum rate: {avg_sum_rate}")
 
 
 if __name__ == '__main__':
-    _main()
+    example_main()
 
 
 

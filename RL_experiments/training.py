@@ -1,3 +1,7 @@
+import dataclasses
+import json
+import os
+from copy import deepcopy
 from typing import Tuple, Callable, Union
 import numpy as np
 import matplotlib.pyplot as plt
@@ -12,6 +16,7 @@ from tf_agents.bandits.agents import neural_linucb_agent
 from tf_agents.drivers import dynamic_step_driver
 from tf_agents.environments.tf_py_environment import TFPyEnvironment
 from tf_agents.networks import sequential
+from tf_agents.policies.policy_saver import PolicySaver
 from tf_agents.policies.tf_policy import TFPolicy
 from tf_agents.replay_buffers import tf_uniform_replay_buffer
 from tf_agents.trajectories import trajectory
@@ -19,6 +24,11 @@ from tf_agents.utils.common import element_wise_squared_loss, element_wise_huber
 from tf_agents.trajectories import time_step as ts
 from tf_agents.bandits.agents.neural_epsilon_greedy_agent import NeuralEpsilonGreedyAgent
 from tf_agents.networks import network
+from scipy.interpolate import make_interp_spline, BSpline
+
+from scipy.ndimage.filters import gaussian_filter1d
+import pandas as pd
+
 
 
 from tqdm import tqdm
@@ -29,30 +39,30 @@ from tqdm import tqdm
 # ------------------------------- EVALUATION FUNCTIONS ----------------------------- #
 
 
-def compute_avg_return(environment, policy, num_episodes=10):
+def compute_avg_return(environment, policy, num_timesteps=100):
     """
     :param environment: A  TfPyEnvironment instance
     :param policy: A TFPolicy in
-    :param num_episodes:
+    :param num_timesteps:
     :return: float
     """
-    total_return = 0.0
+    returns = []
+    time_step = environment.reset()
 
-    for _ in range(num_episodes):
+    for ts_counter in range(num_timesteps):
+        if  time_step.is_last():
+            time_step = environment.reset()
 
-        time_step = environment.reset()
-        episode_return = 0.0
+        action_step = policy.action(time_step)
+        time_step = environment.step(action_step.action)
+        returns.append( float(time_step.reward.numpy()) )
 
-        ts_counter = 0
-        while not time_step.is_last():
-            ts_counter += 1
-            action_step = policy.action(time_step)
-            time_step = environment.step(action_step.action)
-            episode_return += time_step.reward
-        total_return += episode_return / float(ts_counter)
 
-    avg_return = total_return / num_episodes
-    return avg_return.numpy()[0]
+    returns = np.array(returns)
+    avg_return = float(np.mean(returns))
+    std_return = float(np.std(returns))
+
+    return avg_return, std_return
 
 
 def moving_average(x, w):
@@ -206,6 +216,17 @@ class RewardNet(network.Network):
         self._output_tensor_spec = output_tensor_spec
         self._sub_layers = []
 
+
+        reshapeLayer = tf.keras.layers.Reshape((-1,1,1))
+        convLayer1   = tf.keras.layers.Conv2D(64, (5,1), data_format="channels_last")
+        maxPool1     = tf.keras.layers.MaxPool2D((4,1))
+        convLayer2   = tf.keras.layers.Conv2D(64, (5,1), data_format="channels_last")
+        maxPool2     = tf.keras.layers.MaxPool2D((4, 1))
+        flatten      = tf.keras.layers.Flatten()
+
+
+        self._sub_layers = [reshapeLayer, convLayer1, maxPool1, convLayer2, maxPool2, flatten]
+
         for units in fc_layer_params:
             layer = tf.keras.layers.Dense(units,
                                           activation='relu',
@@ -240,7 +261,7 @@ class RewardNet(network.Network):
 def initialize_NeuralEpsilonGreedyAgent(params: NeuralEpsilonGreedyParams, train_env: TFPyEnvironment):
     num_actions = int(train_env.action_spec().maximum) - int(train_env.action_spec().minimum) + 1
     params.num_actions = num_actions
-    params.num_iterations *= params.num_actions
+    params.num_iterations = int(params.num_iterations *  params.num_actions)
 
 
     reward_network = RewardNet(train_env.observation_spec(),
@@ -277,6 +298,14 @@ def train_bandit_agent(agent: TFAgent,
 
     #reward_observer = RewardObserver(params.num_iterations, params.log_interval)
 
+
+    log_dir = f"./logs/{agent.name}/RIS_elements_{params.num_actions}_iters_{params.num_iterations}/"
+    tensorboard_log_dir = log_dir + "tensorboard-logs/"
+    os.makedirs(log_dir, exist_ok=True)
+    os.makedirs(tensorboard_log_dir, exist_ok=True)
+    print(f"Tensorboard logs on: {tensorboard_log_dir}")
+    writer = tf.summary.create_file_writer(tensorboard_log_dir)
+
     replay_buffer = tf_uniform_replay_buffer.TFUniformReplayBuffer(
         data_spec=agent.policy.trajectory_spec,
         batch_size=params.batch_size,
@@ -296,22 +325,36 @@ def train_bandit_agent(agent: TFAgent,
 
     loss_infos = []
     rewards    = []
+    eval_steps = []
+
+    best_policy = None
+    best_return = -np.inf
     try:
         for step in tqdm(range(params.num_iterations)):
             driver.run()
             loss_info = agent.train(replay_buffer.gather_all())
             replay_buffer.clear()
             loss_infos.append(loss_info.loss.numpy())
+            tf.summary.scalar('Loss', loss_info.loss.numpy(), step=step)
 
             if step % params.eval_interval == 0:
-                avg_return = compute_avg_return(environment, agent.policy, params.num_eval_episodes)
-                print('step = {0}: Average Return = {1}'.format(step, avg_return))
+                avg_return, std_return = compute_avg_return(environment, agent.policy, params.num_eval_episodes)
+                tqdm.write('step = {0}: Average Return = {1:.4f} +/- {2:.3f}'.format(step, avg_return, std_return))
                 rewards.append(avg_return)
+                eval_steps.append(step)
+                tf.summary.scalar('Average Reward', avg_return, step=step)
+                writer.flush()
+
+                if avg_return > best_return:
+                    best_return, best_policy = avg_return, deepcopy(agent.policy)
+
+
+        #PolicySaver(agent.policy).save(log_dir+'trained_policy')
 
     except KeyboardInterrupt:
         print('Training stopped by user...')
 
-    return rewards, loss_infos
+    return rewards, loss_infos, eval_steps, best_policy
 
 
 
@@ -372,7 +415,7 @@ def _construct_Q_network(num_actions, fc_layer_params):
 def initialize_DQN_agent(params: DQNParams, train_env: TFPyEnvironment):
     num_actions = int(train_env.action_spec().maximum) - int(train_env.action_spec().minimum) + 1
     params.num_actions = num_actions
-    params.num_iterations *= params.num_actions
+    params.num_iterations = int(params.num_iterations *  params.num_actions)
 
 
     q_net        = _construct_Q_network(num_actions, params.fc_layer_params)
@@ -442,9 +485,10 @@ def train_DQN_agent(agent: dqn_agent.DqnAgent,
     agent.train_step_counter.assign(0)
 
     # Evaluate the agent's policy once before training.
-    avg_return = compute_avg_return(train_env, agent.policy, params.num_eval_episodes)
-    returns = [avg_return]
-    train_losses = []
+    avg_return, _ = compute_avg_return(train_env, agent.policy, params.num_eval_episodes)
+    returns          = [avg_return]
+    train_losses     = []
+    eval_steps       = [0]
 
     print('Starting training')
 
@@ -461,8 +505,8 @@ def train_DQN_agent(agent: dqn_agent.DqnAgent,
                 print('step = {0}: loss = {1}'.format(step, train_loss))
 
             if step % params.eval_interval == 0:
-                avg_return = compute_avg_return(train_env, agent.policy, params.num_eval_episodes)
-                print('step = {0}: Average Return = {1}'.format(step, avg_return))
+                avg_return, std_return = compute_avg_return(train_env, agent.policy, params.num_eval_episodes)
+                tqdm.write('step = {0}: Average Return = {1:.4f} +/- {2:.3f}'.format(step, avg_return, std_return))
                 returns.append(avg_return)
 
     except KeyboardInterrupt:
@@ -470,7 +514,7 @@ def train_DQN_agent(agent: dqn_agent.DqnAgent,
         num_iterations = iter_cnt
 
 
-    return returns, train_losses
+    return returns, train_losses, eval_steps
 
 
 
@@ -485,9 +529,16 @@ def train_DQN_agent(agent: dqn_agent.DqnAgent,
 
 
 
-def plot_loss(loss_values, agent_name, scale='linear', figsize=(16,9)):
+def plot_loss(loss_values, agent_name, scale='linear', figsize=(16,9), smooth_sigma=None):
     plt.figure(figsize=figsize)
-    plt.plot(range(len(loss_values)), loss_values)
+    x = np.arange(1, len(loss_values)+1)
+    plt.plot(x, loss_values, label='original values')
+
+    if smooth_sigma is not None:
+        ysmoothed = gaussian_filter1d(loss_values, sigma=smooth_sigma)
+        plt.plot(x, ysmoothed, label='smoothed')
+        plt.legend()
+
     plt.xlabel('Iterations')
     plt.ylabel('Train loss')
     plt.yscale(scale)
@@ -495,20 +546,91 @@ def plot_loss(loss_values, agent_name, scale='linear', figsize=(16,9)):
     plt.show()
 
 
-def plot_training_performance(reward_values, it_cnt, rolling_window, name=None, random_avg_reward=None, figsize=(30,12)):
+def plot_training_performance(reward_values, it_cnt, rolling_window='unused', name=None, random_avg_reward=None, smooth_sigma=None):
 
     name = name if name is not None else 'Trained agent'
 
-    ma_rewards = moving_average(reward_values[:it_cnt], rolling_window)
-    plt.figure(figsize=figsize)
-    plt.plot(range(rolling_window-1, it_cnt), ma_rewards, alpha=.7)
+    x = range(len(reward_values))
+
+    plt.plot(x, reward_values, alpha=.7, label=name)
+
+
+
     if random_avg_reward is not None:
-        plt.hlines([random_avg_reward], 0, it_cnt, color='k', ls=':', lw=5)
-        plt.legend([name, 'Random policy'], fontsize=30)
-    else:
-        plt.legend([name], fontsize=30)
+        plt.hlines([random_avg_reward], 0, it_cnt, color='k', ls=':', label='random policy')
+
+
+    if smooth_sigma is not None:
+        ysmoothed = gaussian_filter1d(reward_values, sigma=smooth_sigma)
+        plt.plot(x, ysmoothed, label=f'{name} (smoothed)')
+
+    plt.legend()
 
     plt.ylabel('Reward')
     plt.xlabel('Number of Iterations')
     plt.show()
+
+
+
+
+
+def save_results(agent_name            : str,
+                 setupParams           : dict,
+                 agentParams           : dict,
+                 reward_list           : list,
+                 eval_steps            : list,
+                 final_avg_reward      : float,
+                 final_std_reward      : float,
+                 baseline_reward       : float,
+                 score_as_percentage_of_baseline : float,
+                 training_score_as_percentage_of_random : float,
+                 setup_dirname_params  : str,
+                 agent_dirname_params  : str,
+                 results_rootdir        = './results/',
+                 ):
+
+    def to_format_string(s):
+        out = ''
+        for variable in s.split(','):
+            out += "_" + variable + "_{" + variable +"}"
+        return out
+
+    def generate_dirname(dirname_params, values_dict, prefix=''):
+        fstring = to_format_string(dirname_params)
+        dirname = fstring.format(**values_dict)
+        if prefix:
+            dirname = prefix + "_" + dirname
+        return dirname + "/"
+
+    setup_dirname = generate_dirname(setup_dirname_params, setupParams, prefix='setup')
+    agent_dirname = generate_dirname(agent_dirname_params, agentParams, prefix=agent_name)
+
+    all_dirs = os.path.join(results_rootdir, setup_dirname, agent_dirname)
+    os.makedirs(all_dirs, exist_ok=True)
+
+    with open(os.path.join(results_rootdir, setup_dirname, 'setup.json'), 'w') as fout:
+        fout.write(json.dumps(setupParams, indent=4), )
+
+    with open(os.path.join(results_rootdir, setup_dirname, agent_dirname, 'agent_params.json'), 'w') as fout:
+        fout.write(json.dumps(agentParams, indent=4))
+
+    with open(os.path.join(results_rootdir, setup_dirname, agent_dirname, 'agent_performance.json'), 'w') as fout:
+        fout.write(json.dumps({
+            'final_avg_reward' : final_avg_reward,
+            'final_std_reward' : final_std_reward,
+            'baseline_reward'  : baseline_reward,
+            'score_as_percentage_of_baseline' : score_as_percentage_of_baseline,
+            'training_score_as_percentage_of_random' : training_score_as_percentage_of_random,
+        }, indent=4))
+
+    with open(os.path.join(results_rootdir, setup_dirname, agent_dirname, 'agent_training.csv'), 'w') as fout:
+        pd.DataFrame({
+            'iteration' : eval_steps,
+            'reward'    : reward_list,
+        }).to_csv(fout, index=False)
+
+
+
+
+
 

@@ -1,0 +1,69 @@
+{
+  "SETUP": {
+    "K"                         : 2,
+    "B"                         : 4,
+    "M"                         : 2,
+    "N"                         : 32,
+    "group_size"                : 16,
+    "N_controllable"            : 4,
+    "kappa_H"                   : 13.0,
+    "kappa_G"                   : 10.0,
+    "frequency"                 : 5000000000.0,
+    "RIS_resolution"            : 2,
+    "codebook_rays_per_RX"      : 2,
+    "noise_variance"            : -110,
+    "transmit_power"            : 20,
+    "observation_noise_variance": 0.0,
+    "ignore_direct_link"        : true,
+    "direct_link_attenuation"   : 10
+  },
+
+
+  "NEURAL_EPSILON_GREEDY_PARAMS"  : {
+
+    "fc_layer_params"                  : [32, 32],
+    "dropout_p"                        : 0.1,
+    "kernel_l2_reg"                    : 1e-07,
+    "initialization_variance_scale"    : 5,
+    "num_iterations"                   : 1000,
+    "steps_per_loop"                   : 1,
+    "batch_size"                       : 1,
+    "log_interval"                     : "",
+    "eval_interval"                    : 500,
+    "learning_rate"                    : 2e-3,
+    "epsilon_greedy"                   : 0.3,
+    "num_eval_episodes"                : 500,
+    "gradient_clipping"                : null,
+    "num_actions"                      : ""
+  },
+
+
+  "DQN_PARAMS" : {
+    "fc_layer_params"            : [100, 100],
+    "num_iterations"             : 100,
+    "initial_collect_steps"      : 1000,
+    "collect_steps_per_iteration": 1,
+    "replay_buffer_max_length"   : 10000,
+    "batch_size"                 : 32,
+    "learning_rate"              : 10e-3,
+    "log_interval"               : 5,
+    "eval_interval"              : 10,
+    "epsilon_greedy"             : 0.2,
+    "gradient_clipping"          : 100.0,
+    "n_step_update"              : 1,
+    "target_update_tau"          : 1.0,
+    "target_update_period"       : 5,
+    "gamma"                      : 0.9999,
+    "num_eval_episodes"          : 5,
+    "num_actions"                : ""
+  }
+
+}
+
+
+
+
+
+
+
+

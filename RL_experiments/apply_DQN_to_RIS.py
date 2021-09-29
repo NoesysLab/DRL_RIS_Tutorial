@@ -18,7 +18,7 @@ import RL_experiments.parameters as params
 # config.print()
 
 # setup1        = Setup(K=1,
-#                       S=10,
+#                       B=10,
 #                       M=1,
 #                       N=4,
 #                       group_size=1,
