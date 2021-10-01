@@ -17,53 +17,47 @@ from RL_experiments.standalone_simulatiion import Setup
 from RL_experiments.training import NeuralEpsilonGreedyParams
 
 
-class CustomNeuralEpsilonGreedy:
+class CustomNeuralEpsilonGreedy2:
 
     def __init__(self, params: NeuralEpsilonGreedyParams, num_actions:int, observation_dim:int):
-        self.name   = "CustomNeuralEpsilonGreedy"
+        self.name   = "CustomNeuralEpsilonGreedy2"
         self.params = params
         self.num_actions = num_actions
         self.observation_dim = observation_dim
         self.batch_size = self.params.batch_size
         self.params.num_iterations = int(self.params.num_iterations * num_actions)
 
-        self.rewardNet = tf.keras.Sequential([
-            tf.keras.layers.Input((observation_dim,)),
-            tf.keras.layers.Reshape((-1, 1, 1)),
-            tf.keras.layers.Conv2D(64, (5, 1), data_format="channels_last"),
-            tf.keras.layers.Dropout(self.params.dropout_p),
-            tf.keras.layers.MaxPool2D((4, 1)),
-            tf.keras.layers.Conv2D(64, (5, 1), data_format="channels_last"),
-            tf.keras.layers.Dropout(self.params.dropout_p),
-            tf.keras.layers.MaxPool2D((4, 1)),
-            tf.keras.layers.Flatten(),
-            tf.keras.layers.Dense(32, activation='relu'),
-            tf.keras.layers.Dropout(self.params.dropout_p),
-            tf.keras.layers.Dense(32, activation='relu'),
-            tf.keras.layers.Dropout(self.params.dropout_p),
-            tf.keras.layers.Dense(num_actions, activation='linear')
-        ])
+        obs_inp      = tf.keras.layers.Input((observation_dim,))
+        x            = tf.keras.layers.Reshape((-1, 1, 1))(obs_inp)
+        x            = tf.keras.layers.Conv2D(64, (5, 1), data_format="channels_last")(x)
+        x            = tf.keras.layers.Dropout(self.params.dropout_p)(x)
+        x            = tf.keras.layers.MaxPool2D((4, 1))(x)
+        x            = tf.keras.layers.Conv2D(64, (5, 1), data_format="channels_last")(x)
+        x            = tf.keras.layers.Dropout(self.params.dropout_p)(x)
+        x            = tf.keras.layers.MaxPool2D((4, 1))(x)
+        x            = tf.keras.layers.Flatten()(x)
 
-        def custom_MSE(y_actual, y_pred):
-            i = tf.cast(y_actual[:, 1], tf.int32)
-            r = y_actual[:, 0]
-            r_pred = tf.gather(y_pred, i, axis=1)
+        action_input = tf.keras.layers.Input((1,))
 
+        x            = tf.keras.layers.Concatenate()([x, action_input])
+        x            = tf.keras.layers.Dense(32, activation='relu')(x)
+        x            = tf.keras.layers.Dropout(self.params.dropout_p)(x)
+        x            = tf.keras.layers.Dense(32, activation='relu')(x)
+        x            = tf.keras.layers.Dropout(self.params.dropout_p)(x)
+        out          = tf.keras.layers.Dense(1, activation='linear')(x)
 
-            # print(r.shape)
-            # print(y_pred.shape)
-            # print(r_pred.shape)
-            # print(i.shape)
-
-            return K.mean((r - r_pred) ** 2)
-
-        optimizer = tf.keras.optimizers.Adam(learning_rate=params.learning_rate)
-        self.rewardNet.compile(optimizer, loss=custom_MSE)
+        self.rewardNet = tf.keras.Model([obs_inp, action_input], out)
+        optimizer      = tf.keras.optimizers.Adam(learning_rate=params.learning_rate)
+        self.rewardNet.compile(optimizer, loss='mse')
 
 
     def _argmax_action_selection(self, obs):
-        obs = obs.reshape(1,-1)
-        rewards = self.rewardNet.predict(obs)[0,:]
+        obs     = obs.reshape(1,-1)
+        rewards = np.zeros(self.num_actions)
+        for i in range(self.num_actions):
+            a = np.array([i], dtype=np.float32).reshape(1,1)
+            rewards[i] = self.rewardNet.predict([obs,a])[0]
+
         return np.argmax(rewards)
 
     def _epsilon_greedy_selection(self, obs):
@@ -86,7 +80,8 @@ class CustomNeuralEpsilonGreedy:
     def train(self, env: RISEnv2):
 
         batch_X   = np.empty((self.batch_size, self.observation_dim))
-        batch_y   = np.empty((self.batch_size, 2))
+        batch_a   = np.empty(self.batch_size)
+        batch_y   = np.empty(self.batch_size)
         time_step = env._reset()
         batch_i   = 0
         epoch_i   = 0
@@ -114,12 +109,12 @@ class CustomNeuralEpsilonGreedy:
                 reward    = time_step.reward
 
                 batch_X[batch_i, :] = obs
-                batch_y[batch_i, 0] = reward
-                batch_y[batch_i, 1] = action
+                batch_y[batch_i]    = reward
+                batch_a[batch_i]    = action
                 batch_i             = (batch_i + 1) % self.batch_size
 
                 if batch_i % self.batch_size == 0:
-                    hist = self.rewardNet.fit(batch_X, batch_y, batch_size=self.batch_size, epochs=1, steps_per_epoch=1, verbose=0)
+                    hist = self.rewardNet.fit([batch_X, batch_a], batch_y, batch_size=self.batch_size, epochs=1, steps_per_epoch=1, verbose=0)
                     epoch_i += 1
                     losses.append(hist.history['loss'][0])
 
@@ -185,7 +180,7 @@ if __name__ == '__main__':
     optimal_score = compute_average_optimal_policy_return(env, timesteps=agentParams.num_eval_episodes)
     print(f"Score of optimal policy: {optimal_score}\n")
 
-    agent = CustomNeuralEpsilonGreedy(agentParams, env.action_spec().maximum + 1, env.observation_spec().shape[0])
+    agent = CustomNeuralEpsilonGreedy2(agentParams, env.action_spec().maximum + 1, env.observation_spec().shape[0])
 
     # random_policy_average_return = evaluate_agent(random_policy, train_env, num_eval_timesteps, name='Random')
     random_policy_average_return, std_return = compute_avg_return(train_env, random_policy,
@@ -219,7 +214,7 @@ if __name__ == '__main__':
                      "score_as_percentage_of_random"          : score_as_percentage_of_random,
                      "score_as_percentage_of_optimal"         : score_as_percentage_of_optimal
                  },
-                 "N_controllable,K,M,codebook_rays_per_RX,kappa_H",
+                 "N_controllable,K,M,codebook_rays_per_RX,kappa_H,observation_noise_variance",
                  "num_iterations,learning_rate"
                  )
 

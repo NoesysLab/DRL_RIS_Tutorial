@@ -12,7 +12,7 @@ from tf_agents import utils
 from tf_agents.environments import tf_py_environment
 from tf_agents.policies import random_tf_policy
 
-import RL_experiments.parameters as params
+import RL_experiments.OLD_VERSION.parameters as params
 
 # config = CustomConfigParser().load_from_file(open('setup_config.ini', 'r'))
 # config.print()

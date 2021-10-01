@@ -3,10 +3,9 @@ import matplotlib.pyplot as plt
 
 from RL_experiments.test_environment import TestEnv
 from utils.custom_configparser import CustomConfigParser
-from RL_experiments.environments import RIS_TFenv, RISEnv2
 from RL_experiments.training import NeuralLinUCBParams, initialize_Neural_Lin_UCB_agent, train_bandit_agent, \
     plot_training_performance, evaluate_agent, plot_loss
-import RL_experiments.parameters as params
+import RL_experiments.OLD_VERSION.parameters as params
 from RL_experiments.standalone_simulatiion import Setup
 from tf_agents.environments import tf_py_environment
 from tf_agents.policies import random_tf_policy

@@ -54,7 +54,7 @@ from utils.misc import ray_to_elevation_azimuth
 config = CustomConfigParser(interpolation=configparser.ExtendedInterpolation(),
                             allow_no_value=True,
                             inline_comment_prefixes=('#',))
-fin = open('./setup_config.ini', 'r')
+fin = open('setup_config.ini', 'r')
 config.read_file(fin)
 config.print()
 

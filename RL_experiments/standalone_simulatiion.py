@@ -67,7 +67,7 @@ class Setup:
         self.wavelength     = speed_of_light / self.frequency
         self.num_RIS_phases = 2 ** self.RIS_resolution
         self.elem_dist      = self.wavelength if self.elem_dist == 'wavelength' else self.elem_dist
-        self.RX_positions   = get_random_RX_positions(self.K, self.RX_box[0, :], self.RX_box[1, :])
+        self.RX_positions   = np.array([[ 8.77504286, 14.39457326,  1.63428017], [ 9.64815658, 13.28167566,  1.63265777]])#get_random_RX_positions(self.K, self.RX_box[0, :], self.RX_box[1, :])
         self.d_BS_RIS       = calculate_distances(self.BS_position,   self.RIS_positions).flatten()
         self.d_RIS_RX       = calculate_distances(self.RIS_positions, self.RX_positions)  
         self.d_BS_RX        = calculate_distances(self.BS_position,   self.RX_positions).flatten()
@@ -87,6 +87,8 @@ class Setup:
             self.N_controllable = self.N_tot // self.group_size
         else:
             assert self.N_controllable == self.N_tot // self.group_size
+
+        print(f'RXs are positioned at:\n{self.RX_positions}')
 
 
     @staticmethod
