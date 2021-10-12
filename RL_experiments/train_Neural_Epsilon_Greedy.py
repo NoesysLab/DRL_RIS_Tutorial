@@ -167,4 +167,8 @@ class CustomNeuralEpsilonGreedy(Agent):
 
 if __name__ == '__main__':
     import sys
-    run_experiment(sys.argv[1], CustomNeuralEpsilonGreedy, NeuralEpsilonGreedyParams, "NEURAL_EPSILON_GREEDY_PARAMS")
+    run_experiment(sys.argv[1],
+                   CustomNeuralEpsilonGreedy,
+                   NeuralEpsilonGreedyParams,
+                   "NEURAL_EPSILON_GREEDY_PARAMS",
+                   "num_iterations,learning_rate")

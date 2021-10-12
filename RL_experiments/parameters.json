@@ -3,11 +3,11 @@
     "K"                         : 2,
     "B"                         : 4,
     "M"                         : 2,
-    "N"                         : 64,
+    "N"                         : 32,
     "group_size"                : 16,
-    "N_controllable"            : 8,
-    "kappa_H"                   : 5.5,
-    "kappa_G"                   : 5.5,
+    "N_controllable"            : 4,
+    "kappa_H"                   : 30,
+    "kappa_G"                   : 30,
     "frequency"                 : 5000000000.0,
     "RIS_resolution"            : 2,
     "codebook_rays_per_RX"      : 2,
@@ -22,21 +22,21 @@
   "NEURAL_EPSILON_GREEDY_PARAMS"  : {
     "fc_layer_params"                  : [32, 32],
     "dropout_p"                        : 0.2,
-    "num_iterations"                   : 50,
+    "num_iterations"                   : 100,
     "steps_per_loop"                   : 1,
     "batch_size"                       : 128,
-    "num_evaluations"                  : 2,
-    "learning_rate"                    : 5.0000001e-3,
+    "num_evaluations"                  : 10,
+    "learning_rate"                    : 4.99999997e-3,
     "epsilon_greedy"                   : 0.3,
-    "num_eval_episodes"                : 500
+    "num_eval_episodes"                : 300
   },
 
 
   "UCB_PARAMS" : {
-    "alpha"            : 5,
+    "alpha"            : 0.6,
     "gamma"            : 1.0,
-    "num_evaluations"  : 50,
-    "num_iterations"   : 100,
+    "num_evaluations"  : 10,
+    "num_iterations"   : 50,
     "num_eval_episodes": 300
   },
 
