@@ -10,7 +10,7 @@ import seaborn as sns
 from scipy.ndimage.filters import gaussian_filter1d
 import pandas as pd
 from tqdm import tqdm
-from tf_agents.environments import tf_py_environment
+from tf_agents.environments import tf_py_environment, TFPyEnvironment
 from tf_agents.policies import random_tf_policy
 from RL_experiments.environments import RISEnv2
 from RL_experiments.standalone_simulatiion import Setup
@@ -41,14 +41,32 @@ class Agent:
 
     @property
     def policy(self):
-        return None
+        raise NotImplemented
 
     @property
     def collect_policy(self):
-        return None
+        raise NotImplemented
 
     def train(self, env):
         raise ValueError
+
+    def evaluate(self, env: RISEnv2):
+
+        rewards = np.empty((self.params.num_eval_episodes,))
+        time_step = env._reset()
+
+        for i in range(self.params.num_eval_episodes):
+            if time_step.is_last(): time_step = env._reset()
+
+            obs = time_step.observation
+            action = self.policy(obs)
+            time_step = env._step(action)
+            reward = time_step.reward
+            rewards[i] = reward
+
+        return rewards.mean(), rewards.std()
+
+
 
 
 def run_experiment(params_filename, agent_class, agent_params_class, agent_params_JSON_key, agent_params_in_dirname):
@@ -71,10 +89,10 @@ def run_experiment(params_filename, agent_class, agent_params_class, agent_param
     best_policy                     = agent.train(env)
 
     avg_score,\
-    std_return                      = evaluate_agent(agent, env)
+    std_return                      = agent.evaluate(env)
 
     display_and_save_results(agent, params, agentParams, random_policy_average_return, optimal_score, avg_score,
-                             std_return, reward_values, eval_steps, smooth_sigma=5, agent_params_in_dirname=agent_params_in_dirname)
+                             std_return, reward_values, eval_steps, losses, smooth_sigma=5, agent_params_in_dirname=agent_params_in_dirname)
 
 
 
@@ -118,21 +136,6 @@ def compute_avg_return(environment, policy, num_timesteps=100):
 
 
 
-def evaluate_agent(agent, env: RISEnv2):
-
-    rewards = np.empty(agent.params.num_eval_episodes)
-    time_step = env._reset()
-
-    for i in range(agent.params.num_eval_episodes):
-        if time_step.is_last(): time_step = env._reset()
-
-        obs        = time_step.observation
-        action     = agent.policy(obs)
-        time_step  = env._step(action)
-        reward     = time_step.reward
-        rewards[i] = reward
-
-    return rewards.mean(), rewards.std()
 
 
 
@@ -270,8 +273,12 @@ def display_and_save_results(agent,
                              std_return,
                              reward_values,
                              eval_steps,
+                             losses,
                              smooth_sigma=5,
                              agent_params_in_dirname="num_iterations,learning_rate"):
+
+
+    plot_loss(losses, agent.name)
 
     plot_training_performance(reward_values, eval_steps, agent.name, random_policy_average_return, optimal_score,
                               smooth_sigma=smooth_sigma)
