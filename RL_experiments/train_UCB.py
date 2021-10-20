@@ -10,7 +10,7 @@ tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 from dataclasses import dataclass
 from typing import Callable, Tuple
 
-from RL_experiments.training_utils import compute_baseline_scores, display_and_save_results, evaluate_agent, \
+from RL_experiments.training_utils import compute_baseline_scores, display_and_save_results, \
     AgentParams, Agent, run_experiment
 
 from tensorflow.keras import backend as K
@@ -107,7 +107,7 @@ class UCBAgent(Agent):
         reward_steps = []
         losses = []
 
-        initial_reward, _ = evaluate_agent(self, env)
+        initial_reward, _ = self.evaluate(env)
 
         rewards.append(initial_reward)
         reward_steps.append(0)
@@ -128,7 +128,7 @@ class UCBAgent(Agent):
 
 
                 if (step + 1) % eval_interval == 0:
-                    avg_score, std_score = evaluate_agent(self, env)
+                    avg_score, std_score = self.evaluate(env)
                     tqdm.write(f"step={step} | Avg reward = {avg_score} +/- {std_score}.")
                     rewards.append(avg_score)
                     reward_steps.append(step)

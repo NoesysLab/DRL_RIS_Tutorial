@@ -1,3 +1,11 @@
+import os
+
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+import tensorflow as tf
+
+tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
+
+
 import json
 import os
 from copy import deepcopy
@@ -10,7 +18,7 @@ import seaborn as sns
 from scipy.ndimage.filters import gaussian_filter1d
 import pandas as pd
 from tqdm import tqdm
-from tf_agents.environments import tf_py_environment, TFPyEnvironment
+from tf_agents.environments import tf_py_environment
 from tf_agents.policies import random_tf_policy
 from RL_experiments.environments import RISEnv2
 from RL_experiments.standalone_simulatiion import Setup
@@ -69,12 +77,12 @@ class Agent:
 
 
 
-def run_experiment(params_filename, agent_class, agent_params_class, agent_params_JSON_key, agent_params_in_dirname):
+def run_experiment(params_filename, agent_class, agent_params_class, agent_params_JSON_key, agent_params_in_dirname, agentParams=None):
 
 
     params                          = json.loads(open(params_filename).read())
     setup1                          = Setup(**params['SETUP'])
-    agentParams                     = agent_params_class(**params[agent_params_JSON_key])
+    agentParams                     = agent_params_class(**params[agent_params_JSON_key]) if agentParams is None else agentParams
     env                             = RISEnv2(setup1, episode_length=np.inf)
     agent                           = agent_class(agentParams,
                                                   env.action_spec().maximum + 1,
@@ -94,6 +102,7 @@ def run_experiment(params_filename, agent_class, agent_params_class, agent_param
     display_and_save_results(agent, params, agentParams, random_policy_average_return, optimal_score, avg_score,
                              std_return, reward_values, eval_steps, losses, smooth_sigma=5, agent_params_in_dirname=agent_params_in_dirname)
 
+    return avg_score, std_return
 
 
 

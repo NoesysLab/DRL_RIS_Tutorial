@@ -1,3 +1,9 @@
+import os
+
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+import tensorflow as tf
+
+
 from typing import Tuple, Callable, Union
 from dataclasses import dataclass
 from typing import Tuple, Callable
