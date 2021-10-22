@@ -88,7 +88,7 @@ class Setup:
         else:
             assert self.N_controllable == self.N_tot // self.group_size
 
-        print(f'RXs are positioned at:\n{self.RX_positions}')
+        #print(f'RXs are positioned at:\n{self.RX_positions}')
 
 
     @staticmethod

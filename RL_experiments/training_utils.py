@@ -29,6 +29,13 @@ from RL_experiments.standalone_simulatiion import Setup
 from utils.notifyme import send_notification
 
 
+
+def tqdm_(iterator, *args, verbose_=True, **kwargs,):
+    if verbose_:
+        return tqdm(iterator, *args, **kwargs)
+    else:
+        return iterator
+
 @dataclass
 class AgentParams:
     num_iterations    : int
@@ -284,7 +291,8 @@ def display_and_save_results(agent,
                              eval_steps,
                              losses,
                              smooth_sigma=5,
-                             agent_params_in_dirname="num_iterations,learning_rate"):
+                             agent_params_in_dirname="num_iterations,learning_rate",
+                             results_rootdir='./results/'):
 
 
     plot_loss(losses, agent.name)
@@ -293,13 +301,12 @@ def display_and_save_results(agent,
                               smooth_sigma=smooth_sigma)
 
     score_as_percentage_of_random = (avg_score / random_policy_average_return - 1) * 100
-    print(
-        f'{agent.name} attained mean performance of {avg_score} +/- {std_return:.3f} ( {score_as_percentage_of_random}% improvement of random policy).')
+    cond_print(agent_params.verbose, f'{agent.name} attained mean performance of {avg_score} +/- {std_return:.3f} ( {score_as_percentage_of_random}% improvement of random policy).')
 
     score_as_percentage_of_optimal = (avg_score / optimal_score) * 100
-    print(f'Achieved performance is {score_as_percentage_of_optimal} of average optimal policy.')
+    cond_print(agent_params.verbose, f'Achieved performance is {score_as_percentage_of_optimal} of average optimal policy.')
 
-    print("Saving results...")
+    cond_print(agent_params.verbose, "Saving results...")
 
     save_results(agent.name,
                  params['SETUP'],
@@ -314,7 +321,8 @@ def display_and_save_results(agent,
                      "score_as_percentage_of_optimal": score_as_percentage_of_optimal
                  },
                  "N_controllable,K,M,codebook_rays_per_RX,kappa_H,observation_noise_variance",
-                 agent_params_in_dirname
+                 agent_params_in_dirname,
+                 results_rootdir
                  )
 
     send_notification(

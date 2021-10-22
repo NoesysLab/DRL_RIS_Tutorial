@@ -1,15 +1,29 @@
+import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+import tensorflow as tf
+
+
+
+
 import json
 from copy import copy
+from dataclasses import asdict
 
 import numpy as np
 from bayes_opt import BayesianOptimization
 #from bayes_opt import SequentialDomainReductionTransformer
+from bayes_opt.logger import JSONLogger
+from bayes_opt.event import Events
+
+
 import matplotlib.pyplot as plt
 
+from RL_experiments.environments import RISEnv2
+from RL_experiments.standalone_simulatiion import Setup
 from RL_experiments.train_DQN import DQNAgent, DQNParams
 from RL_experiments.train_Neural_Epsilon_Greedy import NeuralEpsilonGreedyParams, CustomNeuralEpsilonGreedy
 from RL_experiments.train_UCB import UCBAgent, UCBParams
-from RL_experiments.training_utils import run_experiment
+from RL_experiments.training_utils import run_experiment, save_results, plot_loss
 
 
 def agent_factory(agent_name):
@@ -40,9 +54,11 @@ def update_dataclass(obj, dict_values):
 
 class OptimizationWrapper:
 
-    def __init__(self, agent_name, pbounds, params_filename="./parameters.json"):
+    def __init__(self, agent_name, pbounds, reruns_per_iter=1, params_filename="./parameters.json"):
 
+        self.agent_name  = agent_name
         self.agent_class, agent_params_class, self.agent_params_JSON_key = agent_factory(agent_name)
+        self.reruns_per_iter = reruns_per_iter
 
         general_params    = json.loads(open(params_filename).read())
         agent_params_JSON = general_params[self.agent_params_JSON_key]
@@ -56,20 +72,50 @@ class OptimizationWrapper:
 
 
 
+
+
+
     def objective_function(self, **kwargs):
         kwargs["initial_collect_steps"] = int(kwargs["initial_collect_steps"])
         kwargs["target_update_period"]  = int(kwargs["target_update_period"])
 
-        curr_agent_params = copy(self.agentParams)
-        update_dataclass(curr_agent_params, kwargs)
 
-        monitored_params_names = ','.join(kwargs.keys())
 
-        score, _ = run_experiment(self.params_filename, self.agent_class, None,
-                                  self.agent_params_JSON_key, monitored_params_names,
-                                  agentParams=curr_agent_params)
 
-        return score
+
+
+        #monitored_params_names = ','.join(kwargs.keys())
+
+        with open(self.params_filename) as f:
+            params = json.loads(f.read())
+        scores = np.empty(self.reruns_per_iter)
+
+        for run in range(self.reruns_per_iter):
+            curr_agent_params = copy(self.agentParams)
+            update_dataclass(curr_agent_params, kwargs)
+            curr_agent_params.verbose = False
+
+            setup1 = Setup(**params['SETUP'])
+            env    = RISEnv2(setup1, episode_length=np.inf)
+            agent  = self.agent_class(curr_agent_params,
+                                env.action_spec().maximum + 1,
+                                env.observation_spec().shape[0])
+
+            reward_values, \
+            losses, \
+            eval_steps, \
+            best_policy = agent.train(env)
+
+            avg_score, \
+            std_return = agent.evaluate(env)
+
+            if run == 0: plot_loss(losses, self.agent_name, smooth_sigma=5)
+
+            scores[run] = avg_score
+
+            del setup1, env, agent
+
+        return scores.mean()
 
 
 
@@ -93,26 +139,20 @@ if __name__ == '__main__':
     }
 
 
-    test_values = {
-        "dropout_p": 0.2,
-        "initial_collect_steps": 100,
-        "learning_rate": 1e-5,
-        "epsilon_greedy": 0.3,
-        "gradient_clipping": 1e-2,
-        "target_update_tau": 0.01,
-        "target_update_period": 100,
-        "gamma": 0.99,
-    }
 
 
+    wrapper   = OptimizationWrapper(agent, pbounds, reruns_per_iter=3)
+    optimizer = BayesianOptimization(f=wrapper.objective_function,
+                                     pbounds=pbounds,
+                                     random_state=42)
 
+    #logger = JSONLogger(path=f"./results/bayes_opt/{agent}/logs.json")
+    #optimizer.subscribe(Events.OPTIMIZATION_STEP, logger)
 
-    wrapper   = OptimizationWrapper(agent, pbounds)
-    # optimizer = BayesianOptimization(f=wrapper.objective_function,
-    #                                  pbounds=pbounds,
-    #                                  random_state=32)
+    res = optimizer.maximize(init_points=3,
+                             n_iter=3)
 
-    # res = optimizer.maximize(init_points=3,
-    #                          n_iter=3)
+    print("Bayesian Optimization results:")
+    print(json.dumps(optimizer.max['params'], indent=4))
+    print(f"Best reward: {optimizer.max['target']}")
 
-    wrapper.objective_function(**test_values)

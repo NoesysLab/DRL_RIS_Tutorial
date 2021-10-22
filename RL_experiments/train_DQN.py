@@ -1,5 +1,4 @@
 import os
-
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import tensorflow as tf
 
@@ -22,7 +21,7 @@ from tqdm import tqdm
 
 from RL_experiments.OLD_VERSION.training import compute_avg_return
 from RL_experiments.environments import RISEnv2
-from RL_experiments.training_utils import AgentParams, Agent, run_experiment
+from RL_experiments.training_utils import AgentParams, Agent, run_experiment, tqdm_
 
 
 @dataclass
@@ -42,6 +41,7 @@ class DQNParams(AgentParams):
     gamma                      : float
     dropout_p                  : float
     td_errors_loss_fn          : str
+    verbose                    : bool = True
 
     def __post_init__(self):
         #self.num_iterations *= self.num_actions
@@ -200,10 +200,10 @@ class DQNAgent(Agent):
 
 
 
-        print('Starting training')
+        if self.params.verbose: print('Starting training')
 
         try:
-            for _ in tqdm(range(self.params.num_iterations)):
+            for _ in tqdm_(range(self.params.num_iterations), verbose_=True):
 
                 self._collect_data(train_env, self._tf_agent.collect_policy, replay_buffer, self.params.collect_steps_per_iteration)
 
@@ -213,10 +213,10 @@ class DQNAgent(Agent):
 
                 losses.append(train_loss)
 
-                if step % self.params.log_interval == 0:
+                if self.params.verbose and step % self.params.log_interval == 0:
                     print('step = {0}: loss = {1}'.format(step, train_loss))
 
-                if (step+1) % eval_interval == 0:
+                if self.params.verbose and (step+1) % eval_interval == 0:
                     avg_score, std_score = self.evaluate(train_env)
                     tqdm.write('step = {0}: Average Return = {1:.4f} +/- {2:.3f}'.format(step-1, avg_score, std_score))
                     rewards.append(avg_score)
