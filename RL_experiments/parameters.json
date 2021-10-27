@@ -19,6 +19,23 @@
   },
 
 
+  "EXPERIMENT" : {
+    "num_iterations"              : 100,
+    "num_eval_episodes"           : 300,
+    "num_evaluations"             : 25,
+    "verbose"                     : true,
+    "plot_loss"                   : true,
+    "plot_performance"            : true,
+    "save_results"                : true,
+    "plot_smooth_sigma"           : true,
+    "results_rootdir"             : "./results/",
+    "convergence"                 : [
+      {"upper_bound_percentage"   : {"fraction":  0.75, "n_iters":  100} }
+    ],
+    "vars_in_dirname"             : "N_controllable,K,M,codebook_rays_per_RX,kappa_H,observation_noise_variance"
+  },
+
+
   "NEURAL_EPSILON_GREEDY_PARAMS"  : {
     "fc_layer_params"                  : [32, 32],
     "dropout_p"                        : 0.2,

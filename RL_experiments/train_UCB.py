@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from typing import Callable, Tuple
 
 from RL_experiments.training_utils import compute_baseline_scores, display_and_save_results, \
-    AgentParams, Agent, run_experiment
+    AgentParams, Agent, run_experiment, apply_callbacks
 
 from tensorflow.keras import backend as K
 
@@ -50,7 +50,7 @@ class UCBAgent(Agent):
         self.N            = None # shape: (num_actions,)
         self._t           = None
 
-        self.params.num_iterations = int(self.params.num_iterations * self._num_actions)
+        #self.params.num_iterations = int(self.params.num_iterations * self._num_actions)
         self.restart()
 
     def restart(self):
@@ -99,7 +99,8 @@ class UCBAgent(Agent):
         return self.ignore_observation_policy_wrapper(self.select_action)
 
 
-    def train(self, env: RISEnv2):
+    def train(self, env: RISEnv2, callbacks=None):
+        if callbacks is None: callbacks = []
 
         eval_interval = self.params.num_iterations // self.params.num_evaluations
 
@@ -132,6 +133,11 @@ class UCBAgent(Agent):
                     tqdm.write(f"step={step} | Avg reward = {avg_score} +/- {std_score}.")
                     rewards.append(avg_score)
                     reward_steps.append(step)
+
+                converged_flag, converged_callback_names = apply_callbacks(callbacks, step, obs, action, reward)
+                if converged_flag:
+                    tqdm.write(f"Step={step} | Algorithm converged due to criteria: {converged_callback_names}")
+                    break
 
         except KeyboardInterrupt:
             print("Training stopped by user...")

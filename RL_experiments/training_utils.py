@@ -1,4 +1,5 @@
 import os
+from abc import ABC
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import tensorflow as tf
@@ -9,7 +10,7 @@ tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 import json
 import os
 from copy import deepcopy
-from typing import Tuple, Callable, Union
+from typing import Tuple, Callable, Union, Iterable
 import numpy as np
 import matplotlib.pyplot as plt
 import builtins
@@ -63,7 +64,7 @@ class Agent:
     def collect_policy(self):
         raise NotImplemented
 
-    def train(self, env):
+    def train(self, env, callbacks=None):
         raise ValueError
 
     def evaluate(self, env: RISEnv2):
@@ -88,24 +89,30 @@ class Agent:
 def run_experiment(params_filename, agent_class, agent_params_class, agent_params_JSON_key, agent_params_in_dirname, agentParams=None):
 
 
-    params                          = json.loads(open(params_filename).read())
-    setup1                          = Setup(**params['SETUP'])
-    agentParams                     = agent_params_class(**params[agent_params_JSON_key]) if agentParams is None else agentParams
-    env                             = RISEnv2(setup1, episode_length=np.inf)
-    agent                           = agent_class(agentParams,
-                                                  env.action_spec().maximum + 1,
-                                                  env.observation_spec().shape[0])
+    params                                          = json.loads(open(params_filename).read())
+    setup1                                          = Setup(**params['SETUP'])
+    env                                             = RISEnv2(setup1, episode_length=np.inf)
+    num_actions                                     = env.action_spec().maximum + 1
+    num_iterations                                  = params[agent_params_JSON_key]['num_iterations']
+    num_iterations                                  = int(num_iterations * num_actions)
+    params[agent_params_JSON_key]['num_iterations'] = num_iterations
+    agentParams                                     = agent_params_class(**params[agent_params_JSON_key]) if agentParams is None else agentParams
+    agent                                           = agent_class(agentParams, num_actions, env.observation_spec().shape[0]) # type: Agent
     optimal_score,\
     random_policy_average_return,\
-    std_return                      = compute_baseline_scores(env, setup1, agentParams, print_=True)
+    std_return                                      = compute_baseline_scores(env, setup1, agentParams, print_=True)
+
+
+    convergence_cb                                  = UpperBoundPercentageConvergence(optimal_score, 0.75, 100)
+
 
     reward_values,\
     losses,\
     eval_steps,\
-    best_policy                     = agent.train(env)
+    best_policy                                     = agent.train(env, callbacks=[convergence_cb])
 
     avg_score,\
-    std_return                      = agent.evaluate(env)
+    std_return                                      = agent.evaluate(env)
 
     display_and_save_results(agent, params, agentParams, random_policy_average_return, optimal_score, avg_score,
                              std_return, reward_values, eval_steps, losses, smooth_sigma=5, agent_params_in_dirname=agent_params_in_dirname)
@@ -328,3 +335,79 @@ def display_and_save_results(agent,
 
     send_notification(
         f"{agent.name} finished. \n {score_as_percentage_of_random}% above random\n {score_as_percentage_of_optimal}% of optimal")
+
+
+
+
+class TrainingCallback:
+    def __init__(self, name):
+        self.name = name
+
+    def __call__(self, step, obs, action, reward):
+        raise NotImplementedError
+
+
+class ConvergenceCallback(TrainingCallback, ABC):
+    def __init__(self, name):
+        super(ConvergenceCallback, self).__init__(name)
+
+    def __call__(self, step, obs, action, reward, **kwargs):
+        raise NotImplementedError
+
+
+class UpperBoundPercentageConvergence(ConvergenceCallback):
+    def __init__(self, upper_bound, fraction, n_iters):
+        super(UpperBoundPercentageConvergence, self).__init__("Upper Bound percentage")
+        self.threshold           = upper_bound * fraction
+        self.n_iters             = n_iters
+        self.n_consecutive_iters = 0
+
+
+
+    def __call__(self, step, obs, action, reward, **kwargs):
+        if reward > self.threshold:
+            self.n_consecutive_iters += 1
+        else:
+            self.n_consecutive_iters = 0
+
+        if self.n_consecutive_iters >= self.n_iters:
+            return True # "converged"
+        else:
+            return False
+
+
+class HistoryCallback(ConvergenceCallback):
+    def __init__(self):
+        super(HistoryCallback, self).__init__("History")
+        self.steps        = []
+        self.observations = []
+        self.actions      = []
+        self.rewards      = []
+
+
+    def __call__(self, step, obs, action, reward, **kwargs):
+        self.steps.append(step)
+        self.observations.append(obs)
+        self.actions.append(action)
+        self.rewards.append(reward)
+
+        return False # never converges due to this function
+
+
+
+
+
+def apply_callbacks(callbacks: Iterable[ConvergenceCallback], step, obs, action, reward, **kwargs):
+    converged          = False
+    converged_cb_names = []
+    for cb in callbacks:
+        convergence_flag = cb(step, obs, action, reward, **kwargs)
+        converged = converged or convergence_flag
+        if convergence_flag:
+            converged_cb_names.append(cb.name)
+
+    converged_cb_names_str = ", ".join(converged_cb_names)
+    return converged, converged_cb_names_str
+
+
+

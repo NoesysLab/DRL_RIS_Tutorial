@@ -21,7 +21,7 @@ from tqdm import tqdm
 
 from RL_experiments.OLD_VERSION.training import compute_avg_return
 from RL_experiments.environments import RISEnv2
-from RL_experiments.training_utils import AgentParams, Agent, run_experiment, tqdm_
+from RL_experiments.training_utils import AgentParams, Agent, run_experiment, tqdm_, apply_callbacks
 
 
 @dataclass
@@ -62,7 +62,7 @@ class DQNAgent(Agent):
         super().__init__("DQN", params, num_actions, observation_dim)
 
         self.batch_size            = self.params.batch_size
-        self.params.num_iterations = int(self.params.num_iterations * num_actions)
+        #self.params.num_iterations = int(self.params.num_iterations * num_actions)
 
 
         self._tf_agent = None
@@ -161,8 +161,14 @@ class DQNAgent(Agent):
             traj = trajectory.from_transition(time_step, action_step, next_time_step)
             buffer.add_batch(traj)
 
+            if steps == 1:
+                return time_step.observation.numpy(), action_step.action.numpy(), time_step.reward.numpy()
+            else:
+                return None, None, None
 
-    def train(self, env: RISEnv2):
+
+    def train(self, env: RISEnv2, callbacks=None):
+        if callbacks is None: callbacks = []
 
         eval_interval = self.params.num_iterations // self.params.num_evaluations
 
@@ -204,7 +210,8 @@ class DQNAgent(Agent):
         try:
             for _ in tqdm_(range(self.params.num_iterations), verbose_=True):
 
-                self._collect_data(train_env, self._tf_agent.collect_policy, replay_buffer, self.params.collect_steps_per_iteration)
+                obs, action, reward = self._collect_data(train_env, self._tf_agent.collect_policy,
+                                                         replay_buffer, self.params.collect_steps_per_iteration)
 
                 experience, _ = next(iterator)
                 train_loss    = self._tf_agent.train(experience).loss
@@ -220,6 +227,11 @@ class DQNAgent(Agent):
                     tqdm.write('step = {0}: Average Return = {1:.4f} +/- {2:.3f}'.format(step-1, avg_score, std_score))
                     rewards.append(avg_score)
                     reward_steps.append(step)
+
+                converged_flag, converged_callback_names = apply_callbacks(callbacks, int(step), obs, action, reward)
+                if converged_flag:
+                    tqdm.write(f"Step={step} | Algorithm converged due to criteria: {converged_callback_names}")
+                    break
 
         except KeyboardInterrupt:
             print('Training aborted by user...')

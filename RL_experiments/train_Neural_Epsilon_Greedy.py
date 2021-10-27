@@ -12,10 +12,7 @@ from dataclasses import dataclass
 from typing import Callable, Tuple
 
 from RL_experiments.training_utils import compute_baseline_scores, display_and_save_results, \
-    AgentParams, Agent, run_experiment
-
-
-
+    AgentParams, Agent, run_experiment, apply_callbacks
 
 from tensorflow.keras import backend as K
 
@@ -50,7 +47,7 @@ class CustomNeuralEpsilonGreedy(Agent):
 
         super().__init__("Neural ε-greedy", params, num_actions, observation_dim)
         self.batch_size = self.params.batch_size
-        self.params.num_iterations = int(self.params.num_iterations * num_actions)
+        #self.params.num_iterations = int(self.params.num_iterations * num_actions)
 
         self.rewardNet = tf.keras.Sequential([
             tf.keras.layers.Input((observation_dim,)),
@@ -108,7 +105,8 @@ class CustomNeuralEpsilonGreedy(Agent):
     def collect_policy(self)->Callable:
         return self._epsilon_greedy_selection
 
-    def train(self, env: RISEnv2):
+    def train(self, env: RISEnv2,callbacks=None):
+        if callbacks is None: callbacks = []
 
         eval_interval = self.params.num_iterations // self.params.num_evaluations
 
@@ -155,6 +153,11 @@ class CustomNeuralEpsilonGreedy(Agent):
                     tqdm.write(f"step={step} | Avg reward = {avg_score} +/- {std_score}.")
                     rewards.append(avg_score)
                     reward_steps.append(step)
+
+                converged_flag, converged_callback_names = apply_callbacks(callbacks, step, obs, action, reward)
+                if converged_flag:
+                    tqdm.write(f"Step={step} | Algorithm converged due to criteria: {converged_callback_names}")
+                    break
 
         except KeyboardInterrupt:
             print("Training stopped by user...")
