@@ -28,13 +28,13 @@ from RL_experiments.standalone_simulatiion import Setup
 
 
 @dataclass
-class NeuralEpsilonGreedyParams(AgentParams):
+class NeuralSoftmaxParams(AgentParams):
     fc_layer_params : Tuple
     dropout_p       : float
     steps_per_loop  : int
     batch_size      : int
     learning_rate   : float
-    epsilon_greedy  : float
+    Boltzmann_tau   : float
 
     def __post_init__(self):
         pass
@@ -44,11 +44,11 @@ class NeuralEpsilonGreedyParams(AgentParams):
 
 
 
-class CustomNeuralEpsilonGreedy(Agent):
+class NeuralSoftmax(Agent):
 
-    def __init__(self, params: NeuralEpsilonGreedyParams, num_actions: int, observation_dim: int):
+    def __init__(self, params: NeuralSoftmaxParams, num_actions: int, observation_dim: int):
 
-        super().__init__("Neural ε-greedy", params, num_actions, observation_dim)
+        super().__init__("Neural Softmax", params, num_actions, observation_dim)
         self.batch_size = self.params.batch_size
         self.params.num_iterations = int(self.params.num_iterations * num_actions)
 
@@ -91,13 +91,21 @@ class CustomNeuralEpsilonGreedy(Agent):
         rewards = self.rewardNet.predict(obs)[0,:]
         return np.argmax(rewards)
 
-    def _epsilon_greedy_selection(self, obs):
-        rnd = np.random.uniform(0, 1)
+    # def _epsilon_greedy_selection(self, obs):
+    #     rnd = np.random.uniform(0, 1)
+    #
+    #     if rnd <= self.params.epsilon_greedy:
+    #         return np.random.randint(0, self.num_actions)
+    #     else:
+    #         return self._argmax_action_selection(obs)
 
-        if rnd <= self.params.epsilon_greedy:
-            return np.random.randint(0, self.num_actions)
-        else:
-            return self._argmax_action_selection(obs)
+    def _Boltzmann_distribution_selection(self, obs):
+        obs       = obs.reshape(1, -1)
+        rewards   = self.rewardNet.predict(obs)[0, :]
+        exponents = np.exp(rewards/self.params.Boltzmann_tau)
+        probs     = exponents / np.sum(exponents)
+        return np.random.choice(self.num_actions, p=probs)
+
 
 
     @property
@@ -106,7 +114,7 @@ class CustomNeuralEpsilonGreedy(Agent):
 
     @property
     def collect_policy(self)->Callable:
-        return self._epsilon_greedy_selection
+        return self._Boltzmann_distribution_selection
 
     def train(self, env: RISEnv2):
 
@@ -170,7 +178,7 @@ class CustomNeuralEpsilonGreedy(Agent):
 if __name__ == '__main__':
     import sys
     run_experiment(sys.argv[1],
-                   CustomNeuralEpsilonGreedy,
-                   NeuralEpsilonGreedyParams,
-                   "NEURAL_EPSILON_GREEDY_PARAMS",
-                   "num_iterations,learning_rate")
+                   NeuralSoftmax,
+                   NeuralSoftmaxParams,
+                   "NEURAL_SOFTMAX_PARAMS",
+                   "num_iterations,learning_rate,Boltzmann_tau")

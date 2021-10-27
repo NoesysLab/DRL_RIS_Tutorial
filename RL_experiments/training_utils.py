@@ -41,6 +41,7 @@ class AgentParams:
     num_iterations    : int
     num_evaluations   : int
     num_eval_episodes : int
+    verbose           : bool
 
     def __post_init__(self):
         pass

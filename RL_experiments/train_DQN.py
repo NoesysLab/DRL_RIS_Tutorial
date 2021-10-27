@@ -41,7 +41,6 @@ class DQNParams(AgentParams):
     gamma                      : float
     dropout_p                  : float
     td_errors_loss_fn          : str
-    verbose                    : bool = True
 
     def __post_init__(self):
         #self.num_iterations *= self.num_actions

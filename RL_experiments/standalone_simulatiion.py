@@ -4,6 +4,7 @@ import numpy as np
 from scipy.constants import pi, speed_of_light
 from dataclasses import dataclass, field
 import json
+import scipy
 
 from tqdm import tqdm
 
@@ -359,15 +360,21 @@ def construct_precoding_matrix(setup: Setup, steering_vector_positions: np.ndarr
 
 def initialize_precoding_codebook(setup):
 
-    codebook = np.empty((setup.codebook_rays_per_RX, setup.B, setup.K), dtype=complex)
+    if setup.B != setup.K * 2:
+        raise ValueError("Current DFT matrix precoder implementation supports 2 beams (i.e. 2 antennas) per user.")
 
-    for i in range(setup.codebook_rays_per_RX):
-        steering_positions = np.empty((setup.K, 3))
-        for k in range(setup.K):
-            steering_positions[k,:] = np.random.uniform(low=setup.RX_box[0,:], high=setup.RX_box[1,:])
+    DFT      = scipy.linalg.dft(setup.B, scale='sqrtn') # shape: (B,B)
+    codebook = np.stack(np.split(DFT, setup.K), axis=2) # shape: (codebook_rays_per_RX, B, K)
 
-        W = construct_precoding_matrix(setup, steering_positions)
-        codebook[i,:,:] = W
+    # codebook = np.empty((setup.codebook_rays_per_RX, setup.B, setup.K), dtype=complex)
+    #
+    # for i in range(setup.codebook_rays_per_RX):
+    #     steering_positions = np.empty((setup.K, 3))
+    #     for k in range(setup.K):
+    #         steering_positions[k,:] = np.random.uniform(low=setup.RX_box[0,:], high=setup.RX_box[1,:])
+    #
+    #     W = construct_precoding_matrix(setup, steering_positions)
+    #     codebook[i,:,:] = W
 
     return codebook
 
