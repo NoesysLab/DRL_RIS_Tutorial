@@ -4,6 +4,8 @@ import os
 
 import os
 
+from RL_experiments.experiments import Experiment
+
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import tensorflow as tf
 
@@ -12,7 +14,7 @@ from dataclasses import dataclass
 from typing import Callable, Tuple
 
 from RL_experiments.training_utils import compute_baseline_scores, display_and_save_results, \
-    AgentParams, Agent, run_experiment, apply_callbacks
+    AgentParams, Agent, apply_callbacks
 
 from tensorflow.keras import backend as K
 
@@ -26,12 +28,12 @@ from RL_experiments.standalone_simulatiion import Setup
 
 @dataclass
 class NeuralSoftmaxParams(AgentParams):
-    fc_layer_params : Tuple
-    dropout_p       : float
-    steps_per_loop  : int
-    batch_size      : int
-    learning_rate   : float
-    Boltzmann_tau   : float
+    fc_layer_params : Tuple     = None
+    dropout_p       : float     = None
+    steps_per_loop  : int       = None
+    batch_size      : int       = None
+    learning_rate   : float     = None
+    Boltzmann_tau   : float     = None
 
     def __post_init__(self):
         pass
@@ -41,7 +43,7 @@ class NeuralSoftmaxParams(AgentParams):
 
 
 
-class NeuralSoftmax(Agent):
+class NeuralSoftmaxAgent(Agent):
 
     def __init__(self, params: NeuralSoftmaxParams, num_actions: int, observation_dim: int):
 
@@ -180,8 +182,10 @@ class NeuralSoftmax(Agent):
 
 if __name__ == '__main__':
     import sys
-    run_experiment(sys.argv[1],
-                   NeuralSoftmax,
-                   NeuralSoftmaxParams,
-                   "NEURAL_SOFTMAX_PARAMS",
-                   "num_iterations,learning_rate,Boltzmann_tau")
+    params_filename = sys.argv[1]
+
+
+    exp = Experiment(params_filename)
+    exp.run(NeuralSoftmaxAgent,
+            NeuralSoftmaxParams,
+            "NEURAL_SOFTMAX_PARAMS",)

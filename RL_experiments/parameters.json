@@ -29,6 +29,7 @@
     "save_results"                : true,
     "plot_smooth_sigma"           : true,
     "results_rootdir"             : "./results/",
+    "use_cached_baselines"        : true,
     "convergence"                 : [
       {"upper_bound_percentage"   : {"fraction":  0.75, "n_iters":  100} }
     ],
@@ -52,14 +53,11 @@
   "NEURAL_SOFTMAX_PARAMS"  : {
     "fc_layer_params"                  : [32, 32],
     "dropout_p"                        : 0.2,
-    "num_iterations"                   : 50,
     "steps_per_loop"                   : 1,
     "batch_size"                       : 32,
-    "num_evaluations"                  : 25,
     "learning_rate"                    : 1e-3,
     "Boltzmann_tau"                    : 0.3,
-    "num_eval_episodes"                : 300,
-    "verbose"                          : true
+    "vals_in_dirname"                  : "num_iterations,learning_rate,Boltzmann_tau"
   },
 
 

@@ -1,6 +1,7 @@
 import os
 from abc import ABC
 
+
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import tensorflow as tf
 
@@ -39,10 +40,11 @@ def tqdm_(iterator, *args, verbose_=True, **kwargs,):
 
 @dataclass
 class AgentParams:
-    num_iterations    : int
-    num_evaluations   : int
-    num_eval_episodes : int
-    verbose           : bool
+    num_iterations    : int  = None
+    num_evaluations   : int  = None
+    num_eval_episodes : int  = None
+    verbose           : bool = None
+    vals_in_dirname   : str  = None
 
     def __post_init__(self):
         pass
@@ -85,40 +87,40 @@ class Agent:
 
 
 
-
-def run_experiment(params_filename, agent_class, agent_params_class, agent_params_JSON_key, agent_params_in_dirname, agentParams=None):
-
-
-    params                                          = json.loads(open(params_filename).read())
-    setup1                                          = Setup(**params['SETUP'])
-    env                                             = RISEnv2(setup1, episode_length=np.inf)
-    num_actions                                     = env.action_spec().maximum + 1
-    num_iterations                                  = params[agent_params_JSON_key]['num_iterations']
-    num_iterations                                  = int(num_iterations * num_actions)
-    params[agent_params_JSON_key]['num_iterations'] = num_iterations
-    agentParams                                     = agent_params_class(**params[agent_params_JSON_key]) if agentParams is None else agentParams
-    agent                                           = agent_class(agentParams, num_actions, env.observation_spec().shape[0]) # type: Agent
-    optimal_score,\
-    random_policy_average_return,\
-    std_return                                      = compute_baseline_scores(env, setup1, agentParams, print_=True)
-
-
-    convergence_cb                                  = UpperBoundPercentageConvergence(optimal_score, 0.75, 100)
-
-
-    reward_values,\
-    losses,\
-    eval_steps,\
-    best_policy                                     = agent.train(env, callbacks=[convergence_cb])
-
-    avg_score,\
-    std_return                                      = agent.evaluate(env)
-
-    display_and_save_results(agent, params, agentParams, random_policy_average_return, optimal_score, avg_score,
-                             std_return, reward_values, eval_steps, losses, smooth_sigma=5, agent_params_in_dirname=agent_params_in_dirname)
-
-    return avg_score, std_return
-
+#
+# def run_experiment(params_filename, agent_class, agent_params_class, agent_params_JSON_key, agent_params_in_dirname, agentParams=None):
+#
+#
+#     params                                          = json.loads(open(params_filename).read())
+#     setup1                                          = Setup(**params['SETUP'])
+#     env                                             = RISEnv2(setup1, episode_length=np.inf)
+#     num_actions                                     = env.action_spec().maximum + 1
+#     num_iterations                                  = params[agent_params_JSON_key]['num_iterations']
+#     num_iterations                                  = int(num_iterations * num_actions)
+#     params[agent_params_JSON_key]['num_iterations'] = num_iterations
+#     agentParams                                     = agent_params_class(**params[agent_params_JSON_key]) if agentParams is None else agentParams
+#     agent                                           = agent_class(agentParams, num_actions, env.observation_spec().shape[0]) # type: Agent
+#     optimal_score,\
+#     random_policy_average_return,\
+#     std_return                                      = compute_baseline_scores(env, setup1, agentParams, print_=True)
+#
+#
+#     convergence_cb                                  = UpperBoundPercentageConvergence(optimal_score, 0.75, 100)
+#
+#
+#     reward_values,\
+#     losses,\
+#     eval_steps,\
+#     best_policy                                     = agent.train(env, callbacks=[convergence_cb])
+#
+#     avg_score,\
+#     std_return                                      = agent.evaluate(env)
+#
+#     display_and_save_results(agent, params, agentParams, random_policy_average_return, optimal_score, avg_score,
+#                              std_return, reward_values, eval_steps, losses, smooth_sigma=5, agent_params_in_dirname=agent_params_in_dirname)
+#
+#     return avg_score, std_return
+#
 
 
 
@@ -270,18 +272,17 @@ def cond_print(print_, *args, **kwargs):
 
 
 
-def compute_baseline_scores(env: RISEnv2, setup: Setup, agentParams: dataclass, print_=True):
+def compute_baseline_scores(env: RISEnv2, setup: Setup, num_eval_episodes: int, print_=True):
     cond_print(print_, f"\nRunning with {env.action_spec().maximum + 1} actions ({setup.N_controllable} bits for RIS configurations, {env.codebook_size_bits_required} bits for codebook).")
     cond_print(print_, f"Observation space is of dimension: {env.observation_spec().shape}.")
 
     train_env = tf_py_environment.TFPyEnvironment(env)
     random_policy = random_tf_policy.RandomTFPolicy(train_env.time_step_spec(), train_env.action_spec())
 
-    optimal_score = compute_average_optimal_policy_return(env, timesteps=agentParams.num_eval_episodes)
+    optimal_score = compute_average_optimal_policy_return(env, timesteps=num_eval_episodes)
     cond_print(print_, f"Score of optimal policy: {optimal_score}\n")
 
-    random_policy_average_return, std_return = compute_avg_return(train_env, random_policy,
-                                                                  agentParams.num_eval_episodes)
+    random_policy_average_return, std_return = compute_avg_return(train_env, random_policy, num_eval_episodes)
     cond_print(print_, f"\nRandom policy average return: {random_policy_average_return} +/- {std_return:3f}\n")
 
     return optimal_score, random_policy_average_return, std_return
@@ -339,65 +340,7 @@ def display_and_save_results(agent,
 
 
 
-class TrainingCallback:
-    def __init__(self, name):
-        self.name = name
-
-    def __call__(self, step, obs, action, reward):
-        raise NotImplementedError
-
-
-class ConvergenceCallback(TrainingCallback, ABC):
-    def __init__(self, name):
-        super(ConvergenceCallback, self).__init__(name)
-
-    def __call__(self, step, obs, action, reward, **kwargs):
-        raise NotImplementedError
-
-
-class UpperBoundPercentageConvergence(ConvergenceCallback):
-    def __init__(self, upper_bound, fraction, n_iters):
-        super(UpperBoundPercentageConvergence, self).__init__("Upper Bound percentage")
-        self.threshold           = upper_bound * fraction
-        self.n_iters             = n_iters
-        self.n_consecutive_iters = 0
-
-
-
-    def __call__(self, step, obs, action, reward, **kwargs):
-        if reward > self.threshold:
-            self.n_consecutive_iters += 1
-        else:
-            self.n_consecutive_iters = 0
-
-        if self.n_consecutive_iters >= self.n_iters:
-            return True # "converged"
-        else:
-            return False
-
-
-class HistoryCallback(ConvergenceCallback):
-    def __init__(self):
-        super(HistoryCallback, self).__init__("History")
-        self.steps        = []
-        self.observations = []
-        self.actions      = []
-        self.rewards      = []
-
-
-    def __call__(self, step, obs, action, reward, **kwargs):
-        self.steps.append(step)
-        self.observations.append(obs)
-        self.actions.append(action)
-        self.rewards.append(reward)
-
-        return False # never converges due to this function
-
-
-
-
-
-def apply_callbacks(callbacks: Iterable[ConvergenceCallback], step, obs, action, reward, **kwargs):
+def apply_callbacks(callbacks: Iterable, step, obs, action, reward, **kwargs):
     converged          = False
     converged_cb_names = []
     for cb in callbacks:
@@ -408,6 +351,5 @@ def apply_callbacks(callbacks: Iterable[ConvergenceCallback], step, obs, action,
 
     converged_cb_names_str = ", ".join(converged_cb_names)
     return converged, converged_cb_names_str
-
 
 
