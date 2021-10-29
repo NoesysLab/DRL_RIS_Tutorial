@@ -11,7 +11,7 @@ tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 import json
 import os
 from copy import deepcopy
-from typing import Tuple, Callable, Union, Iterable
+from typing import Tuple, Callable, Union, Iterable, List
 import numpy as np
 import matplotlib.pyplot as plt
 import builtins
@@ -66,10 +66,81 @@ class Agent:
     def collect_policy(self):
         raise NotImplemented
 
-    def train(self, env, callbacks=None):
-        raise ValueError
+    def _initialize_training_vars(self):
+        raise NotImplementedError
+
+    def _apply_collect_step(self, step, obs, action, reward)->None:
+        raise NotImplementedError
+
+    def _perform_update_step(self)->List:
+        raise NotImplementedError
+
+
+
+    def train(self, env, training_callbacks=None, eval_callbacks=None):
+        if training_callbacks is None: training_callbacks = []
+        if eval_callbacks is None: eval_callbacks = []
+
+        eval_interval = self.params.num_iterations // self.params.num_evaluations
+
+        self._initialize_training_vars()
+
+        rewards      = []
+        reward_steps = []
+        losses       = []
+
+        initial_reward, _ = self.evaluate(env)
+
+        rewards.append(initial_reward)
+        reward_steps.append(0)
+
+        time_step = env._reset()
+
+        try:
+            for step in tqdm(range(self.params.num_iterations)):
+
+                if time_step.is_last():
+                    time_step = env._reset()
+
+                obs       = time_step.observation
+                action    = self.collect_policy(obs)
+                time_step = env._step(action)
+                reward    = time_step.reward
+
+                self._apply_collect_step(step, obs, action, reward)
+
+                this_step_losses = self._perform_update_step()
+                losses += this_step_losses
+
+
+                if step % eval_interval == 0:
+                    avg_score, std_score = self.evaluate(env)
+                    #tqdm.write(f"step={step} | Avg reward = {avg_score} +/- {std_score}.")
+                    rewards.append(avg_score)
+                    reward_steps.append(step)
+
+                    converged_flag, converged_callback_names = apply_callbacks(eval_callbacks, step, reward=avg_score)
+                    if converged_flag:
+                        tqdm.write(f"Step={step} | Algorithm converged due to criteria: {converged_callback_names}")
+                        break
+
+
+                converged_flag, converged_callback_names = apply_callbacks(training_callbacks, step, obs, action, reward)
+                if converged_flag:
+                    tqdm.write(f"Step={step} | Algorithm converged due to criteria: {converged_callback_names}")
+                    break
+
+        except KeyboardInterrupt:
+            print("Training stopped by user...")
+
+        return rewards, losses, reward_steps, self.policy
+
+
+
+
 
     def evaluate(self, env: RISEnv2):
+
 
         rewards = np.empty((self.params.num_eval_episodes,))
         time_step = env._reset()
@@ -84,47 +155,6 @@ class Agent:
             rewards[i] = reward
 
         return rewards.mean(), rewards.std()
-
-
-
-#
-# def run_experiment(params_filename, agent_class, agent_params_class, agent_params_JSON_key, agent_params_in_dirname, agentParams=None):
-#
-#
-#     params                                          = json.loads(open(params_filename).read())
-#     setup1                                          = Setup(**params['SETUP'])
-#     env                                             = RISEnv2(setup1, episode_length=np.inf)
-#     num_actions                                     = env.action_spec().maximum + 1
-#     num_iterations                                  = params[agent_params_JSON_key]['num_iterations']
-#     num_iterations                                  = int(num_iterations * num_actions)
-#     params[agent_params_JSON_key]['num_iterations'] = num_iterations
-#     agentParams                                     = agent_params_class(**params[agent_params_JSON_key]) if agentParams is None else agentParams
-#     agent                                           = agent_class(agentParams, num_actions, env.observation_spec().shape[0]) # type: Agent
-#     optimal_score,\
-#     random_policy_average_return,\
-#     std_return                                      = compute_baseline_scores(env, setup1, agentParams, print_=True)
-#
-#
-#     convergence_cb                                  = UpperBoundPercentageConvergence(optimal_score, 0.75, 100)
-#
-#
-#     reward_values,\
-#     losses,\
-#     eval_steps,\
-#     best_policy                                     = agent.train(env, callbacks=[convergence_cb])
-#
-#     avg_score,\
-#     std_return                                      = agent.evaluate(env)
-#
-#     display_and_save_results(agent, params, agentParams, random_policy_average_return, optimal_score, avg_score,
-#                              std_return, reward_values, eval_steps, losses, smooth_sigma=5, agent_params_in_dirname=agent_params_in_dirname)
-#
-#     return avg_score, std_return
-#
-
-
-
-
 
 
 
@@ -340,7 +370,7 @@ def display_and_save_results(agent,
 
 
 
-def apply_callbacks(callbacks: Iterable, step, obs, action, reward, **kwargs):
+def apply_callbacks(callbacks: Iterable, step, obs=None, action=None, reward=None, **kwargs):
     converged          = False
     converged_cb_names = []
     for cb in callbacks:

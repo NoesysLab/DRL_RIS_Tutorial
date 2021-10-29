@@ -31,7 +31,7 @@
     "results_rootdir"             : "./results/",
     "use_cached_baselines"        : true,
     "convergence"                 : [
-      {"upper_bound_percentage"   : {"fraction":  0.75, "n_iters":  100} }
+      {"upper_bound_percentage"   : {"fraction":  0.7, "n_iters":  3} }
     ],
     "vars_in_dirname"             : "N_controllable,K,M,codebook_rays_per_RX,kappa_H,observation_noise_variance"
   },
@@ -57,6 +57,9 @@
     "batch_size"                       : 32,
     "learning_rate"                    : 1e-3,
     "Boltzmann_tau"                    : 0.3,
+    "tau_change"                       : "constant",
+    "tau_initial"                      : null,
+    "tau_final"                        : null,
     "vals_in_dirname"                  : "num_iterations,learning_rate,Boltzmann_tau"
   },
 

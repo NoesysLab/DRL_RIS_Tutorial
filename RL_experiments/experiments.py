@@ -1,9 +1,18 @@
+import os
+
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+import tensorflow as tf
+
+
 import json
 import os
 from abc import ABC
-from collections import Iterable
+from typing import Iterable, List
 
 import numpy as np
+from tqdm import tqdm
+from termcolor import colored
+
 
 from RL_experiments.environments import RISEnv2
 from RL_experiments.standalone_simulatiion import Setup
@@ -46,7 +55,8 @@ class Experiment:
         self.std_return                   = None                                    # type: float
 
         self.setup_dirname                = self._generate_setup_dirname()
-        self.callbacks                    = []                                      # type: List[TrainingCallback]
+        self.training_callbacks           = []                                      # type: List[TrainingCallback]
+        self.eval_callbacks               = []                                      # type: List[TrainingCallback]
 
     def _generate_setup_dirname(self) -> str:
         def to_format_string(s):
@@ -101,7 +111,8 @@ class Experiment:
 
     def _initialize_callbacks(self):
 
-        self.callbacks = []
+        self.training_callbacks = []
+        self.eval_callbacks     = []
 
         for callback_dict in self.exp_params["convergence"]:
             callback_name   = next(iter(callback_dict))
@@ -109,9 +120,9 @@ class Experiment:
             cb_name         = callback_name.lower().replace(' ', '_')
 
             if cb_name == 'upper_bound_percentage':
-                self.callbacks.append(UpperBoundPercentageConvergence(self.optimal_score, **callback_params))
+                self.eval_callbacks.append(UpperBoundPercentageConvergence(self.optimal_score, **callback_params))
 
-        self.callbacks.append(HistoryCallback())
+        self.training_callbacks.append(HistoryCallback())
 
 
 
@@ -153,7 +164,7 @@ class Experiment:
         self._initialize_callbacks()
 
 
-        reward_values, losses, eval_steps, best_policy = agent.train(env, callbacks=self.callbacks)
+        reward_values, losses, eval_steps, best_policy = agent.train(env, training_callbacks=self.training_callbacks, eval_callbacks=self.eval_callbacks)
         avg_score, std_return                          = agent.evaluate(env)
 
         display_and_save_results(agent, self.params, agent.params, self.random_policy_average_return,
@@ -167,7 +178,7 @@ class TrainingCallback:
     def __init__(self, name):
         self.name = name
 
-    def __call__(self, step, obs, action, reward):
+    def __call__(self, step, obs=None, action=None, reward=None):
         raise NotImplementedError
 
 
@@ -175,7 +186,7 @@ class ConvergenceCallback(TrainingCallback, ABC):
     def __init__(self, name):
         super(ConvergenceCallback, self).__init__(name)
 
-    def __call__(self, step, obs, action, reward, **kwargs):
+    def __call__(self, step, obs=None, action=None, reward=None, **kwargs):
         raise NotImplementedError
 
 
@@ -183,21 +194,26 @@ class UpperBoundPercentageConvergence(ConvergenceCallback):
     def __init__(self, upper_bound, fraction, n_iters):
         super(UpperBoundPercentageConvergence, self).__init__("Upper bound percentage threshold")
         self.threshold           = upper_bound * fraction
+        self.upper_bound         = upper_bound
         self.n_iters             = n_iters
         self.n_consecutive_iters = 0
 
 
 
-    def __call__(self, step, obs, action, reward, **kwargs):
+    def __call__(self, step, obs=None, action=None, reward=None, **kwargs):
         if reward > self.threshold:
             self.n_consecutive_iters += 1
+            tqdm.write(f"{step} | " + "Avg reward : "+ colored(str(reward), "green")+f" ({reward/self.threshold} of optimal)")
         else:
             self.n_consecutive_iters = 0
+            tqdm.write(f"{step} | " + "Avg reward : "+ colored(str(reward), "red")+f" ({reward/self.threshold} of optimal)")
 
         if self.n_consecutive_iters >= self.n_iters:
             return True # "converged"
         else:
             return False
+
+
 
 
 class HistoryCallback(ConvergenceCallback):
@@ -209,7 +225,7 @@ class HistoryCallback(ConvergenceCallback):
         self.rewards      = []
 
 
-    def __call__(self, step, obs, action, reward, **kwargs):
+    def __call__(self, step, obs=None, action=None, reward=None, **kwargs):
         self.steps.append(step)
         self.observations.append(obs)
         self.actions.append(action)

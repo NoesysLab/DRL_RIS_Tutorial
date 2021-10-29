@@ -4,7 +4,6 @@ import os
 
 import os
 
-from RL_experiments.experiments import Experiment
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import tensorflow as tf
@@ -23,6 +22,7 @@ from tqdm import tqdm
 
 from RL_experiments.environments import RISEnv2
 from RL_experiments.standalone_simulatiion import Setup
+from RL_experiments.experiments import Experiment
 
 
 
@@ -34,9 +34,13 @@ class NeuralSoftmaxParams(AgentParams):
     batch_size      : int       = None
     learning_rate   : float     = None
     Boltzmann_tau   : float     = None
+    tau_change      : str       = None
+    tau_initial     : float     = None
+    tau_final       : float     = None
 
     def __post_init__(self):
-        pass
+        if self.tau_change is not None:
+            if self.tau_change not in ['constant', 'linear', 'exponential']: raise ValueError
 
 
 
@@ -50,6 +54,8 @@ class NeuralSoftmaxAgent(Agent):
         super().__init__("Neural Softmax", params, num_actions, observation_dim)
         self.batch_size = self.params.batch_size
         #self.params.num_iterations = int(self.params.num_iterations * num_actions)
+
+        assert self.params.tau_change == 'constant'
 
         self.rewardNet = tf.keras.Sequential([
             tf.keras.layers.Input((observation_dim,)),
@@ -114,66 +120,33 @@ class NeuralSoftmaxAgent(Agent):
     @property
     def collect_policy(self)->Callable:
         return self._Boltzmann_distribution_selection
-
-    def train(self, env: RISEnv2, callbacks=None):
-        if callbacks is None: callbacks = []
-
-        eval_interval = self.params.num_iterations // self.params.num_evaluations
-
-        batch_X   = np.empty((self.batch_size, self.observation_dim))
-        batch_y   = np.empty((self.batch_size, 2))
-        time_step = env._reset()
-        batch_i   = 0
-        epoch_i   = 0
-
-        rewards      = []
-        reward_steps = []
-        losses       = []
-
-        initial_reward, _ = self.evaluate(env)
-
-        rewards.append(initial_reward)
-        reward_steps.append(0)
+    
+    
+    def _initialize_training_vars(self):
+        self.batch_X   = np.empty((self.batch_size, self.observation_dim))
+        self.batch_y   = np.empty((self.batch_size, 2))
+        self.batch_i   = 0
+        self.epoch_i   = 0
+        
+    def _apply_collect_step(self, step, obs, action, reward):
+        self.batch_X[self.batch_i, :] = obs
+        self.batch_y[self.batch_i, 0] = reward
+        self.batch_y[self.batch_i, 1] = action
+        self.batch_i                  = (self.batch_i + 1) % self.batch_size
+        
 
 
+    def _perform_update_step(self):
+        if self.batch_i % self.batch_size == 0:
+            hist = self.rewardNet.fit(self.batch_X, self.batch_y, batch_size=self.batch_size, epochs=self.params.steps_per_loop,
+                                      steps_per_epoch=1, verbose=0)
+            self.epoch_i += 1
+            loss = hist.history['loss'][0]
 
-        try:
-            for step in tqdm(range(self.params.num_iterations)):
+            return [loss]
+        else:
+            return []
 
-                if time_step.is_last():
-                    time_step = env._reset()
-
-                obs       = time_step.observation
-                action    = self.collect_policy(obs)
-                time_step = env._step(action)
-                reward    = time_step.reward
-
-                batch_X[batch_i, :] = obs
-                batch_y[batch_i, 0] = reward
-                batch_y[batch_i, 1] = action
-                batch_i             = (batch_i + 1) % self.batch_size
-
-                if batch_i % self.batch_size == 0:
-                    hist = self.rewardNet.fit(batch_X, batch_y, batch_size=self.batch_size, epochs=self.params.steps_per_loop, steps_per_epoch=1, verbose=0)
-                    epoch_i += 1
-                    losses.append(hist.history['loss'][0])
-
-                if (step) % eval_interval == 0:
-                    avg_score, std_score = self.evaluate(env)
-                    tqdm.write(f"step={step} | Avg reward = {avg_score} +/- {std_score}.")
-                    rewards.append(avg_score)
-                    reward_steps.append(step)
-
-                converged_flag, converged_callback_names = apply_callbacks(callbacks, step, obs, action, reward)
-                if converged_flag:
-                    tqdm.write(f"Step={step} | Algorithm converged due to criteria: {converged_callback_names}")
-                    break
-
-        except KeyboardInterrupt:
-            print("Training stopped by user...")
-
-
-        return rewards, losses, reward_steps, self.policy
 
 
 
