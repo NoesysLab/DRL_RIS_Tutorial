@@ -1,4 +1,7 @@
 import os
+
+from RL_experiments.experiments import Experiment
+
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import tensorflow as tf
 
@@ -21,26 +24,27 @@ from tqdm import tqdm
 
 from RL_experiments.OLD_VERSION.training import compute_avg_return
 from RL_experiments.environments import RISEnv2
-from RL_experiments.training_utils import AgentParams, Agent, run_experiment, tqdm_, apply_callbacks
+from RL_experiments.training_utils import AgentParams, Agent, tqdm_, apply_callbacks
 
 
 @dataclass
 class DQNParams(AgentParams):
-    fc_layer_params            : Tuple
-    initial_collect_steps      : int
-    collect_steps_per_iteration: int
-    replay_buffer_max_length   : int
-    batch_size                 : int
-    learning_rate              : float
-    log_interval               : int
-    epsilon_greedy             : float
-    gradient_clipping          : float
-    n_step_update              : int
-    target_update_tau          : float
-    target_update_period       : int
-    gamma                      : float
-    dropout_p                  : float
-    td_errors_loss_fn          : str
+    fc_layer_params            : Tuple    = None
+    initial_collect_steps      : int      = None
+    collect_steps_per_iteration: int      = None
+    replay_buffer_max_length   : int      = None
+    batch_size                 : int      = None
+    learning_rate              : float    = None
+    log_interval               : int      = None
+    epsilon_greedy             : float    = None
+    gradient_clipping          : float    = None
+    n_step_update              : int      = None
+    target_update_tau          : float    = None
+    target_update_period       : int      = None
+    gamma                      : float    = None
+    dropout_p                  : float    = None
+    td_errors_loss_fn          : str      = None
+    vals_in_dirname            : str      = None
 
     def __post_init__(self):
         #self.num_iterations *= self.num_actions
@@ -167,10 +171,15 @@ class DQNAgent(Agent):
                 return None, None, None
 
 
-    def train(self, env: RISEnv2, callbacks=None):
-        if callbacks is None: callbacks = []
 
-        eval_interval = self.params.num_iterations // self.params.num_evaluations
+    def train(self, env, training_callbacks=None, eval_callbacks=None):
+        return self.train_tf(env, training_callbacks, eval_callbacks)
+
+
+    def train_tf(self, env: RISEnv2, training_callbacks=None, eval_callbacks=None):
+        if training_callbacks is None: training_callbacks = []
+        if eval_callbacks is None: eval_callbacks = []
+
 
         train_env = tf_py_environment.TFPyEnvironment(env)
         random_policy = random_tf_policy.RandomTFPolicy(train_env.time_step_spec(), train_env.action_spec())
@@ -220,15 +229,22 @@ class DQNAgent(Agent):
                 losses.append(train_loss)
 
                 if self.params.verbose and step % self.params.log_interval == 0:
-                    print('step = {0}: loss = {1}'.format(step, train_loss))
+                    #print('step = {0}: loss = {1}'.format(step, train_loss))
+                    pass
 
-                if self.params.verbose and (step+1) % eval_interval == 0:
+                if self.params.verbose and step % self.eval_interval == 0:
                     avg_score, std_score = self.evaluate(train_env)
-                    tqdm.write('step = {0}: Average Return = {1:.4f} +/- {2:.3f}'.format(step-1, avg_score, std_score))
+                    #tqdm.write('step = {0}: Average Return = {1:.4f} +/- {2:.3f}'.format(step-1, avg_score, std_score))
                     rewards.append(avg_score)
                     reward_steps.append(step)
 
-                converged_flag, converged_callback_names = apply_callbacks(callbacks, int(step), obs, action, reward)
+                    converged_flag, converged_callback_names = apply_callbacks(eval_callbacks, step, reward=avg_score)
+                    if converged_flag:
+                        tqdm.write(f"Step={step} | Algorithm converged due to criteria: {converged_callback_names}")
+                        break
+
+                converged_flag, converged_callback_names = apply_callbacks(training_callbacks, step, obs, action,
+                                                                           reward)
                 if converged_flag:
                     tqdm.write(f"Step={step} | Algorithm converged due to criteria: {converged_callback_names}")
                     break
@@ -250,10 +266,11 @@ class DQNAgent(Agent):
 
 
 if __name__ == '__main__':
-    import sys
 
-    run_experiment(sys.argv[1],
-                   DQNAgent,
-                   DQNParams,
-                   "DQN_PARAMS",
-                   "num_iterations,learning_rate")
+    import sys
+    params_filename = sys.argv[1]
+
+    exp = Experiment(params_filename)
+    exp.run(DQNAgent,
+            DQNParams,
+            "DQN_PARAMS",)

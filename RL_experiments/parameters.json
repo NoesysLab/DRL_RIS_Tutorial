@@ -6,8 +6,8 @@
     "N"                         : 32,
     "group_size"                : 16,
     "N_controllable"            : 4,
-    "kappa_H"                   : 30,
-    "kappa_G"                   : 30,
+    "kappa_H"                   : 25,
+    "kappa_G"                   : 25,
     "frequency"                 : 5000000000.0,
     "RIS_resolution"            : 2,
     "codebook_rays_per_RX"      : 2,
@@ -20,9 +20,10 @@
 
 
   "EXPERIMENT" : {
-    "num_iterations"              : 100,
-    "num_eval_episodes"           : 300,
-    "num_evaluations"             : 25,
+    "num_iterations"              : 200,
+    "num_eval_episodes"           : 500,
+    "num_evaluations"             : null,
+    "eval_interval"               : 500,
     "verbose"                     : true,
     "plot_loss"                   : true,
     "plot_performance"            : true,
@@ -31,7 +32,7 @@
     "results_rootdir"             : "./results/",
     "use_cached_baselines"        : true,
     "convergence"                 : [
-      {"upper_bound_percentage"   : {"fraction":  0.7, "n_iters":  3} }
+      {"upper_bound_percentage"   : {"fraction":  0.8, "n_iters":  5} }
     ],
     "vars_in_dirname"             : "N_controllable,K,M,codebook_rays_per_RX,kappa_H,observation_noise_variance"
   },
@@ -56,7 +57,7 @@
     "steps_per_loop"                   : 1,
     "batch_size"                       : 32,
     "learning_rate"                    : 1e-3,
-    "Boltzmann_tau"                    : 0.3,
+    "Boltzmann_tau"                    : 0.6 ,
     "tau_change"                       : "constant",
     "tau_initial"                      : null,
     "tau_final"                        : null,
@@ -76,8 +77,7 @@
   "DQN_PARAMS" : {
     "fc_layer_params"            : [32, 32],
     "dropout_p"                  : 0.3,
-    "num_iterations"             : 50,
-    "initial_collect_steps"      : 128,
+    "initial_collect_steps"      : 1,
     "collect_steps_per_iteration": 1,
     "replay_buffer_max_length"   : 10000,
     "batch_size"                 : 128,
@@ -89,10 +89,9 @@
     "target_update_tau"          : 0.18,
     "target_update_period"       : 100,
     "gamma"                      : 0.99,
-    "num_eval_episodes"          : 300,
-    "num_evaluations"            : 25,
     "td_errors_loss_fn"          : "element_wise_squared_loss",
-    "verbose"                    : true
+    "verbose"                    : true,
+    "vals_in_dirname"            : "num_iterations,learning_rate,target_update_tau"
   }
 
 }

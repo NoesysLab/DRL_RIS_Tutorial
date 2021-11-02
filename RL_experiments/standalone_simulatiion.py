@@ -143,7 +143,7 @@ def calculate_distances(A: np.ndarray, B: np.ndarray)->np.ndarray:
     return dists
 
 def sample_gaussian_standard_normal(size=None):
-    betta = np.random.normal(0, 1, size=size) + 1j * np.random.normal(0, 1, size=size)
+    betta = 1/np.sqrt(2) * (np.random.normal(0, 1, size=size) + 1j * np.random.normal(0, 1, size=size))
     return betta
 
 

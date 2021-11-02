@@ -48,6 +48,7 @@ class Experiment:
         self.results_rootdir              = self.exp_params['results_rootdir']      # type: str
         self.vars_in_dirname              = self.exp_params['vars_in_dirname']      # type: str
         self.use_cached_baselines         = self.exp_params['use_cached_baselines'] # type: bool
+        self.eval_interval                = self.exp_params['eval_interval']        # type: int
 
         self.num_actions                  = None                                    # type: int
         self.optimal_score                = None                                    # type: float
@@ -126,13 +127,12 @@ class Experiment:
 
 
 
-
-    def _set_params_to_agent(self, agent: Agent):
-        agent.params.num_iterations    = self.num_iterations
-        agent.params.num_eval_episodes = self.num_eval_episodes
-        agent.params.num_evaluations   = self.num_evaluations
-        agent.params.verbose           = self.verbose
-
+    def _update_agent_params(self, agentParams):
+        agentParams.num_iterations    = self.num_iterations
+        agentParams.num_eval_episodes = self.num_eval_episodes
+        agentParams.num_evaluations   = self.num_evaluations
+        agentParams.verbose           = self.verbose
+        agentParams.eval_interval     = self.eval_interval
 
 
 
@@ -147,13 +147,14 @@ class Experiment:
 
         if isinstance(agent_or_agent_class, Agent):
             agent = agent_or_agent_class
+            self._update_agent_params(agent.params)
         else:
             agent_class = agent_or_agent_class
             agentParams = agent_params_class(**self.params[agent_params_JSON_key])
+            self._update_agent_params(agentParams)
             agent = agent_class(agentParams, num_actions, env.observation_spec().shape[0])  # type: Agent
 
 
-        self._set_params_to_agent(agent)
 
 
         if not self.use_cached_baselines or not self._load_baseline_scores_from_saved_file():
@@ -164,7 +165,7 @@ class Experiment:
         self._initialize_callbacks()
 
 
-        reward_values, losses, eval_steps, best_policy = agent.train(env, training_callbacks=self.training_callbacks, eval_callbacks=self.eval_callbacks)
+        reward_values, losses, eval_steps, best_policy = agent.train(env, self.training_callbacks, self.eval_callbacks)
         avg_score, std_return                          = agent.evaluate(env)
 
         display_and_save_results(agent, self.params, agent.params, self.random_policy_average_return,
@@ -203,10 +204,10 @@ class UpperBoundPercentageConvergence(ConvergenceCallback):
     def __call__(self, step, obs=None, action=None, reward=None, **kwargs):
         if reward > self.threshold:
             self.n_consecutive_iters += 1
-            tqdm.write(f"{step} | " + "Avg reward : "+ colored(str(reward), "green")+f" ({reward/self.threshold} of optimal)")
+            tqdm.write(f"{step} | " + "Avg reward : "+ colored(str(reward), "green")+f" ({reward/self.upper_bound} of optimal)")
         else:
             self.n_consecutive_iters = 0
-            tqdm.write(f"{step} | " + "Avg reward : "+ colored(str(reward), "red")+f" ({reward/self.threshold} of optimal)")
+            tqdm.write(f"{step} | " + "Avg reward : "+ colored(str(reward), "red")+f" ({reward/self.upper_bound} of optimal)")
 
         if self.n_consecutive_iters >= self.n_iters:
             return True # "converged"

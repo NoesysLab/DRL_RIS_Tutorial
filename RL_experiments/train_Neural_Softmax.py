@@ -129,6 +129,7 @@ class NeuralSoftmaxAgent(Agent):
         self.epoch_i   = 0
         
     def _apply_collect_step(self, step, obs, action, reward):
+
         self.batch_X[self.batch_i, :] = obs
         self.batch_y[self.batch_i, 0] = reward
         self.batch_y[self.batch_i, 1] = action

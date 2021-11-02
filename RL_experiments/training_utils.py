@@ -42,12 +42,14 @@ def tqdm_(iterator, *args, verbose_=True, **kwargs,):
 class AgentParams:
     num_iterations    : int  = None
     num_evaluations   : int  = None
+    eval_interval     : int  = None
     num_eval_episodes : int  = None
     verbose           : bool = None
     vals_in_dirname   : str  = None
 
     def __post_init__(self):
-        pass
+        if self.eval_interval is not None and self.num_evaluations is not None:
+            raise ValueError("Conflicting arguments: Expected one out of `num_evaluations`, `eval_interval` not to be null, found values in both.")
 
 
 class Agent:
@@ -57,6 +59,11 @@ class Agent:
         self.params          = params
         self.num_actions     = num_actions
         self.observation_dim = observation_dim
+
+        if self.params.eval_interval is None:
+            self.eval_interval = self.params.num_iterations // self.params.num_evaluations
+        else:
+            self.eval_interval = self.params.eval_interval
 
     @property
     def policy(self):
@@ -81,7 +88,7 @@ class Agent:
         if training_callbacks is None: training_callbacks = []
         if eval_callbacks is None: eval_callbacks = []
 
-        eval_interval = self.params.num_iterations // self.params.num_evaluations
+
 
         self._initialize_training_vars()
 
@@ -102,6 +109,10 @@ class Agent:
                 if time_step.is_last():
                     time_step = env._reset()
 
+
+                # action_step   = self.collect_policy(time_step)
+                # next_time_step = env.step(action_step.action)
+
                 obs       = time_step.observation
                 action    = self.collect_policy(obs)
                 time_step = env._step(action)
@@ -112,8 +123,10 @@ class Agent:
                 this_step_losses = self._perform_update_step()
                 losses += this_step_losses
 
+                #time_step = next_time_step
 
-                if step % eval_interval == 0:
+
+                if step % self.eval_interval == 0:
                     avg_score, std_score = self.evaluate(env)
                     #tqdm.write(f"step={step} | Avg reward = {avg_score} +/- {std_score}.")
                     rewards.append(avg_score)
