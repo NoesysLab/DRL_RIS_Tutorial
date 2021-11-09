@@ -1,0 +1,106 @@
+{
+  "SETUP": {
+    "K"                         : 2,
+    "B"                         : 4,
+    "M"                         : 2,
+    "N"                         : 48,
+    "group_size"                : 16,
+    "N_controllable"            : 6,
+    "kappa_H"                   : 30,
+    "kappa_G"                   : 30,
+    "frequency"                 : 5000000000.0,
+    "RIS_resolution"            : 2,
+    "codebook_rays_per_RX"      : 2,
+    "noise_variance"            : -110,
+    "transmit_power"            : 40,
+    "observation_noise_variance": 0,
+    "ignore_direct_link"        : true,
+    "direct_link_attenuation"   : 10
+  },
+
+
+  "EXPERIMENT" : {
+    "num_iterations"              : 500,
+    "num_eval_episodes"           : 500,
+    "num_evaluations"             : null,
+    "eval_interval"               : 100000,
+    "verbose"                     : true,
+    "plot_loss"                   : true,
+    "plot_performance"            : true,
+    "save_results"                : true,
+    "plot_smooth_sigma"           : true,
+    "results_rootdir"             : "./results/",
+    "use_cached_baselines"        : true,
+    "convergence"                 : [
+      {"upper_bound_percentage"   : {"fraction":  0.8, "n_iters":  5} }
+    ],
+    "vars_in_dirname"             : "N_controllable,K,M,codebook_rays_per_RX,kappa_H,observation_noise_variance"
+  },
+
+
+  "NEURAL_EPSILON_GREEDY_PARAMS"  : {
+    "fc_layer_params"                  : [32, 32],
+    "dropout_p"                        : 0.2,
+    "num_iterations"                   : 50,
+    "steps_per_loop"                   : 1,
+    "batch_size"                       : 8,
+    "num_evaluations"                  : 25,
+    "learning_rate"                    : 1e-3,
+    "epsilon_greedy"                   : 0.3,
+    "num_eval_episodes"                : 300,
+    "verbose"                          : true
+  },
+
+  "NEURAL_SOFTMAX_PARAMS"  : {
+    "fc_layer_params"                  : [32, 32],
+    "dropout_p"                        : 0.2,
+    "steps_per_loop"                   : 1,
+    "batch_size"                       : 32,
+    "learning_rate"                    : 1e-3,
+    "Boltzmann_tau"                    : 0.6 ,
+    "tau_change"                       : "constant",
+    "tau_initial"                      : null,
+    "tau_final"                        : null,
+    "vals_in_dirname"                  : "num_iterations,learning_rate,Boltzmann_tau"
+  },
+
+
+  "UCB_PARAMS" : {
+    "alpha"            : 0.6,
+    "gamma"            : 1.0,
+    "num_evaluations"  : 10,
+    "num_iterations"   : 50,
+    "num_eval_episodes": 300,
+    "verbose"          : true,
+    "vals_in_dirname"  : "num_iterations,alpha"
+  },
+
+  "DQN_PARAMS" : {
+    "fc_layer_params"            : [32, 32],
+    "dropout_p"                  : 0.3,
+    "initial_collect_steps"      : 1,
+    "collect_steps_per_iteration": 1,
+    "replay_buffer_max_length"   : 10000,
+    "batch_size"                 : 128,
+    "learning_rate"              : 2e-4,
+    "log_interval"               : 50,
+    "epsilon_greedy"             : 0.3,
+    "gradient_clipping"          : 1000,
+    "n_step_update"              : 1,
+    "target_update_tau"          : 0.18,
+    "target_update_period"       : 100,
+    "gamma"                      : 0.99,
+    "td_errors_loss_fn"          : "element_wise_squared_loss",
+    "verbose"                    : true,
+    "vals_in_dirname"            : "num_iterations,learning_rate,target_update_tau"
+  }
+
+}
+
+
+
+
+
+
+
+

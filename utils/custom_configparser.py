@@ -175,6 +175,17 @@ def print_aligned(dict_: Dict):
 
 class CustomConfigParser(configparser.ConfigParser):
 
+    def __init__(self, *args, **kwargs):
+        super(CustomConfigParser, self).__init__(*args,
+                                                 interpolation=configparser.ExtendedInterpolation(),
+                                                 allow_no_value=True,
+                                                 inline_comment_prefixes=('#',),
+                                                  **kwargs)
+
+    def load_from_file(self, f):
+        self.read_file(f)
+        return self
+
     def get(self, section: str, option: str, **kwargs) -> str:
         try:
             return super().get(section, option, **kwargs)
