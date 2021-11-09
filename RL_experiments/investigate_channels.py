@@ -11,7 +11,7 @@ from RL_experiments.environments import RISEnv2
 from RL_experiments.standalone_simulatiion import Setup
 
 sns.set_theme()
-
+#sns.set_palette("Reds")
 
 def bin2int(b):
     return b.dot(2**np.arange(b.size)[::-1])
@@ -44,6 +44,8 @@ optimal_profiles  = np.empty((N_REALIZATIONS, env.setup.N_controllable))
 optimal_precoders = np.empty(N_REALIZATIONS)
 
 
+
+
 for i in tqdm(range(N_REALIZATIONS)):
 
     env.reset()
@@ -54,7 +56,8 @@ for i in tqdm(range(N_REALIZATIONS)):
     precoder_best = None
     (H, G, h)     = env._state
 
-    for a in range(env.action_spec().maximum):
+
+    for a in range(num_actions):
         codebook_selection, configuration = env.split_action_to_precoding_and_RIS_profile(a)
         configuration_ext                 = env.extend_configuration_to_groups(configuration)
         Phi                               = env.configuration2phases(configuration_ext)
@@ -94,11 +97,16 @@ ax.set_title(f'Number of times each element is selected of the optimal profile i
 ax.set_xlabel('RIS element')
 plt.show()
 
-# fig, ax = plt.subplots(figsize=(12,6))
-# sns.histplot(optimal_precoders, binwidth=1)
-# ax.set_title(f'Number of times precoding matrix is selected of the optimal profile in {N_REALIZATIONS} realizations')
-# ax.set_xlabel('Precoding matrix index')
-# plt.show()
+fig, ax = plt.subplots(figsize=(12,6))
+plt.bar(np.arange(num_actions), rates[0,:])
+ax.set_title(f'Distribution of rates by different ris profiles in a single realization')
+plt.show()
 
 
+import matplotlib
+matplotlib.rc_file_defaults()
+fig, ax = plt.subplots(figsize=(15,8))
+plt.bar(np.arange(num_actions), rates.mean(axis=0), color='k', alpha=1)
+ax.set_title(f'Average rates per action')
+plt.show()
 

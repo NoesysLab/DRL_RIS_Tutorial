@@ -152,11 +152,13 @@ class Agent:
 
 
 
-    def evaluate(self, env: RISEnv2):
+    def evaluate(self, env: RISEnv2, return_info=False):
 
 
         rewards = np.empty((self.params.num_eval_episodes,))
         time_step = env._reset()
+
+        info = {'observation': [], 'action': [], 'reward': []}
 
         for i in range(self.params.num_eval_episodes):
             if time_step.is_last(): time_step = env._reset()
@@ -167,7 +169,18 @@ class Agent:
             reward = time_step.reward
             rewards[i] = reward
 
-        return rewards.mean(), rewards.std()
+            if return_info:
+                info['observation'].append(obs)
+                info['action'].append(action)
+                info['reward'].append(reward)
+
+        if return_info:
+            return rewards.mean(), rewards.std(), info
+        else:
+            return rewards.mean(), rewards.std()
+
+
+
 
 
 

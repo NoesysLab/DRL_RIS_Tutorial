@@ -127,6 +127,7 @@ class Experiment:
 
 
 
+
     def _update_agent_params(self, agentParams):
         agentParams.num_iterations    = self.num_iterations
         agentParams.num_eval_episodes = self.num_eval_episodes
@@ -166,12 +167,15 @@ class Experiment:
 
 
         reward_values, losses, eval_steps, best_policy = agent.train(env, self.training_callbacks, self.eval_callbacks)
-        avg_score, std_return                          = agent.evaluate(env)
+        avg_score, std_return, info                          = agent.evaluate(env, return_info=True)
 
         display_and_save_results(agent, self.params, agent.params, self.random_policy_average_return,
                                  self.optimal_score, avg_score, std_return, reward_values, eval_steps,
                                  losses, smooth_sigma=self.plot_smooth_sigma,
                                  agent_params_in_dirname=agent.params.vals_in_dirname)
+
+
+        return agent, info
 
 
 

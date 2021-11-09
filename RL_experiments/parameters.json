@@ -3,9 +3,9 @@
     "K"                         : 2,
     "B"                         : 4,
     "M"                         : 2,
-    "N"                         : 64,
+    "N"                         : 48,
     "group_size"                : 16,
-    "N_controllable"            : 8,
+    "N_controllable"            : 6,
     "kappa_H"                   : 30,
     "kappa_G"                   : 30,
     "frequency"                 : 5000000000.0,
@@ -20,10 +20,10 @@
 
 
   "EXPERIMENT" : {
-    "num_iterations"              : 200,
+    "num_iterations"              : 500,
     "num_eval_episodes"           : 500,
     "num_evaluations"             : null,
-    "eval_interval"               : 500,
+    "eval_interval"               : 100000,
     "verbose"                     : true,
     "plot_loss"                   : true,
     "plot_performance"            : true,
@@ -71,7 +71,8 @@
     "num_evaluations"  : 10,
     "num_iterations"   : 50,
     "num_eval_episodes": 300,
-    "verbose"          : true
+    "verbose"          : true,
+    "vals_in_dirname"  : "num_iterations,alpha"
   },
 
   "DQN_PARAMS" : {
