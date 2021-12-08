@@ -96,20 +96,20 @@ class NeuralSoftmaxAgent(Agent):
         rewards = self.rewardNet.predict(obs)[0,:]
         return np.argmax(rewards)
 
-    # def _epsilon_greedy_selection(self, obs):
-    #     rnd = np.random.uniform(0, 1)
-    #
-    #     if rnd <= self.params.epsilon_greedy:
-    #         return np.random.randint(0, self.num_actions)
-    #     else:
-    #         return self._argmax_action_selection(obs)
+    def _epsilon_greedy_selection(self, obs):
+        rnd = np.random.uniform(0, 1)
 
-    def _Boltzmann_distribution_selection(self, obs):
-        obs       = obs.reshape(1, -1)
-        rewards   = self.rewardNet.predict(obs)[0, :]
-        exponents = np.exp(rewards/self.params.Boltzmann_tau)
-        probs     = exponents / np.sum(exponents)
-        return np.random.choice(self.num_actions, p=probs)
+        if rnd <= 0.3:
+            return np.random.randint(0, self.num_actions)
+        else:
+            return self._argmax_action_selection(obs)
+
+    # def _Boltzmann_distribution_selection(self, obs):
+    #     obs       = obs.reshape(1, -1)
+    #     rewards   = self.rewardNet.predict(obs)[0, :]
+    #     exponents = np.exp(rewards/self.params.Boltzmann_tau)
+    #     probs     = exponents / np.sum(exponents)
+    #     return np.random.choice(self.num_actions, p=probs)
 
 
 
@@ -119,7 +119,8 @@ class NeuralSoftmaxAgent(Agent):
 
     @property
     def collect_policy(self)->Callable:
-        return self._Boltzmann_distribution_selection
+        #return self._Boltzmann_distribution_selection
+        return self._epsilon_greedy_selection
     
     
     def _initialize_training_vars(self):

@@ -21,7 +21,6 @@ import matplotlib.pyplot as plt
 from RL_experiments.environments import RISEnv2
 from RL_experiments.standalone_simulatiion import Setup
 from RL_experiments.train_DQN import DQNAgent, DQNParams
-from RL_experiments.train_Neural_Epsilon_Greedy import NeuralEpsilonGreedyParams, CustomNeuralEpsilonGreedy
 from RL_experiments.train_UCB import UCBAgent, UCBParams
 from RL_experiments.training_utils import run_experiment, save_results, plot_loss
 

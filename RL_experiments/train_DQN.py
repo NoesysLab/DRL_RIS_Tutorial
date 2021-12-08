@@ -257,11 +257,14 @@ class DQNAgent(Agent):
 
 
 
-    def evaluate(self, env: Union[RISEnv2, TFPyEnvironment]):
+    def evaluate(self, env: Union[RISEnv2, TFPyEnvironment], return_info=False):
         if not isinstance(env, TFPyEnvironment):
             env = tf_py_environment.TFPyEnvironment(env)
-        return compute_avg_return(env, self.policy, self.params.num_eval_episodes)
-
+        avg_score, std_return = compute_avg_return(env, self.policy, self.params.num_eval_episodes)
+        if not return_info:
+            return avg_score, std_return
+        else:
+            return avg_score, std_return, None
 
 
 
