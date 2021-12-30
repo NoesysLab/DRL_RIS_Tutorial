@@ -1,4 +1,4 @@
-
+import socket
 from urllib import request, parse
 
 
@@ -27,9 +27,13 @@ def _handle_response(response):
 
 
 
-def send_notification(msg, title='Deskbuntu', key=None, event=None):
+def send_notification(msg, title=None, key=None, event=None):
 
     if key is None: key = __key
+
+    if title is None:
+        title = socket.gethostname()
+
 
     data = parse.urlencode({'key': key, 'title': title, 'msg': msg, 'event': event}).encode()
     req = request.Request("https://api.simplepush.io/send", data=data)

@@ -178,18 +178,18 @@ if __name__ == '__main__':
                    "UCB_PARAMS", )
 
     import seaborn as sns
-    plt.figure()
-    plt.bar(range(len(agent.Q)), agent.Q)
-    plt.xlabel("Action index")
-    plt.ylabel("rate")
-    plt.title("UCB reward predictions after training")
-    plt.show()
-
-    plt.figure()
-    plt.bar(range(len(agent.Q)), agent.N)
-    plt.xlabel("Action index")
-    plt.title("Number of times each action was selected during training")
-    plt.show()
+    # plt.figure()
+    # plt.bar(range(len(agent.Q)), agent.Q)
+    # plt.xlabel("Action index")
+    # plt.ylabel("rate")
+    # plt.title("UCB reward predictions after training")
+    # plt.show()
+    #
+    # plt.figure()
+    # plt.bar(range(len(agent.Q)), agent.N)
+    # plt.xlabel("Action index")
+    # plt.title("Number of times each action was selected during training")
+    # plt.show()
 
     #
     # def plot_eval_statistics(info):
