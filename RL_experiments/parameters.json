@@ -20,42 +20,30 @@
 
 
   "EXPERIMENT" : {
-    "num_iterations"              : 500,
-    "num_eval_episodes"           : 500,
-    "num_evaluations"             : null,
-    "eval_interval"               : 100000,
+    "num_iterations"              : 50,
+    "num_eval_episodes"           : 300,
+    "num_evaluations"             : 10,
+    "eval_interval"               : null,
     "verbose"                     : true,
     "plot_loss"                   : true,
     "plot_performance"            : true,
     "save_results"                : true,
-    "plot_smooth_sigma"           : true,
-    "results_rootdir"             : "./results/",
+    "plot_smooth_sigma"           : 100,
+    "results_rootdir"             : "./results/ICC/",
     "use_cached_baselines"        : true,
     "convergence"                 : [
-      {"upper_bound_percentage"   : {"fraction":  0.8, "n_iters":  5} }
+      {"upper_bound_percentage"   : {"fraction":  0.99, "n_iters":  5} },
+      {"reward_monitoring"        : {"frequency": 1000}}
     ],
     "vars_in_dirname"             : "N_controllable,K,M,codebook_rays_per_RX,kappa_H,observation_noise_variance"
   },
 
 
-  "NEURAL_EPSILON_GREEDY_PARAMS"  : {
-    "fc_layer_params"                  : [32, 32],
-    "dropout_p"                        : 0.2,
-    "num_iterations"                   : 50,
-    "steps_per_loop"                   : 1,
-    "batch_size"                       : 8,
-    "num_evaluations"                  : 25,
-    "learning_rate"                    : 1e-3,
-    "epsilon_greedy"                   : 0.3,
-    "num_eval_episodes"                : 300,
-    "verbose"                          : true
-  },
-
   "NEURAL_SOFTMAX_PARAMS"  : {
     "fc_layer_params"                  : [32, 32],
     "dropout_p"                        : 0.2,
     "steps_per_loop"                   : 1,
-    "batch_size"                       : 32,
+    "batch_size"                       : 1,
     "learning_rate"                    : 1e-3,
     "Boltzmann_tau"                    : 0.6 ,
     "tau_change"                       : "constant",
@@ -66,10 +54,10 @@
 
 
   "UCB_PARAMS" : {
-    "alpha"            : 0.6,
+    "alpha"            : 10,
     "gamma"            : 1.0,
     "num_evaluations"  : 10,
-    "num_iterations"   : 50,
+    "num_iterations"   : 100,
     "num_eval_episodes": 300,
     "verbose"          : true,
     "vals_in_dirname"  : "num_iterations,alpha"
@@ -92,7 +80,7 @@
     "gamma"                      : 0.99,
     "td_errors_loss_fn"          : "element_wise_squared_loss",
     "verbose"                    : true,
-    "vals_in_dirname"            : "num_iterations,learning_rate,target_update_tau"
+    "vals_in_dirname"            : "num_iterations,learning_rate,target_update_tau,log_interval"
   }
 
 }

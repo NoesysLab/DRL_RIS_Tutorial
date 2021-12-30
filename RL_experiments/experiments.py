@@ -1,3 +1,4 @@
+import dataclasses
 import os
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
@@ -55,29 +56,50 @@ class Experiment:
         self.random_policy_average_return = None                                    # type: float
         self.std_return                   = None                                    # type: float
 
+        self.agent_dirname                = None
+
         self.setup_dirname                = self._generate_setup_dirname()
         self.training_callbacks           = []                                      # type: List[TrainingCallback]
         self.eval_callbacks               = []                                      # type: List[TrainingCallback]
 
+
+
+    @staticmethod
+    def to_format_string(s):
+        out = ''
+        for variable in s.split(','):
+            out += "_" + variable + "_{" + variable + "}"
+        return out
+
+
+    def generate_dirname(self, dirname_params, values_dict, prefix=''):
+        fstring = self.to_format_string(dirname_params)
+        dirname = fstring.format(**values_dict)
+        if prefix:
+            dirname = prefix + "_" + dirname
+        return dirname + "/"
+
     def _generate_setup_dirname(self) -> str:
-        def to_format_string(s):
-            out = ''
-            for variable in s.split(','):
-                out += "_" + variable + "_{" + variable + "}"
-            return out
 
-        def generate_dirname(dirname_params, values_dict, prefix=''):
-            fstring = to_format_string(dirname_params)
-            dirname = fstring.format(**values_dict)
-            if prefix:
-                dirname = prefix + "_" + dirname
-            return dirname + "/"
-
-        setup_dirname = generate_dirname(self.exp_params['vars_in_dirname'], self.setup_params, prefix='setup')
+        setup_dirname = self.generate_dirname(self.exp_params['vars_in_dirname'], self.setup_params, prefix='setup')
         setup_dirname = os.path.join(self.results_rootdir, setup_dirname)
         os.makedirs(setup_dirname, exist_ok=True)
 
         return setup_dirname
+
+
+
+    def _generate_agent_dirname(self, agent_name, agentParams):
+        if dataclasses.is_dataclass(agentParams): agentParams = dataclasses.asdict(agentParams)
+
+        agent_dirname = self.generate_dirname(agentParams['vals_in_dirname'], agentParams, prefix=agent_name)
+        agent_dirname = os.path.join(self.setup_dirname, agent_dirname)
+        os.makedirs(agent_dirname, exist_ok=True)
+
+        self.agent_dirname = agent_dirname
+
+
+
 
     def _load_baseline_scores_from_saved_file(self):
         try:
@@ -121,9 +143,15 @@ class Experiment:
             cb_name         = callback_name.lower().replace(' ', '_')
 
             if cb_name == 'upper_bound_percentage':
-                self.eval_callbacks.append(UpperBoundPercentageConvergence(self.optimal_score, **callback_params))
+               self.eval_callbacks.append(UpperBoundPercentageConvergence(self.optimal_score, **callback_params))
+
+            if cb_name == 'reward_monitoring':
+
+                self.training_callbacks.append(RewardMonitoringCallback(**callback_params, verbose=self.verbose))
+
 
         self.training_callbacks.append(HistoryCallback())
+
 
 
 
@@ -156,23 +184,25 @@ class Experiment:
             agent = agent_class(agentParams, num_actions, env.observation_spec().shape[0])  # type: Agent
 
 
+        self._generate_agent_dirname(agent.name, agent.params)
 
 
         if not self.use_cached_baselines or not self._load_baseline_scores_from_saved_file():
             self.optimal_score, self.random_policy_average_return, self.std_return = compute_baseline_scores(env, self.setup, self.num_eval_episodes, print_=self.verbose)
-            #self._store_baseline_scores_to_file()
+            self._store_baseline_scores_to_file()
 
 
         self._initialize_callbacks()
 
 
-        reward_values, losses, eval_steps, best_policy = agent.train(env, self.training_callbacks, self.eval_callbacks)
+        eval_reward_values, losses, eval_steps, best_policy  = agent.train(env, self.training_callbacks, self.eval_callbacks)
         avg_score, std_return, info                          = agent.evaluate(env, return_info=True)
 
+
+        reward_values = self.training_callbacks[-1].rewards
         display_and_save_results(agent, self.params, agent.params, self.random_policy_average_return,
-                                 self.optimal_score, avg_score, std_return, reward_values, eval_steps,
-                                 losses, smooth_sigma=self.plot_smooth_sigma,
-                                 agent_params_in_dirname=agent.params.vals_in_dirname)
+                                 self.optimal_score, avg_score, std_return, reward_values, eval_reward_values,
+                                 eval_steps, losses, self.plot_smooth_sigma, self.setup_dirname, self.agent_dirname)
 
 
         return agent, info
@@ -240,7 +270,34 @@ class HistoryCallback(ConvergenceCallback):
 
 
 
+class RewardMonitoringCallback(ConvergenceCallback):
+    def __init__(self, frequency=50, filename=None, verbose=True):
+        super(RewardMonitoringCallback, self).__init__("Exploration Evaluation")
+        self.frequency = frequency
+        self.ts = 0
+        self.verbose = verbose
+        self.rewards = np.zeros(self.frequency)
+        self.filename = filename
 
+
+
+    def __call__(self,  step, obs=None, action=None, reward=None, **kwargs):
+        if reward is None: raise ValueError
+
+        self.rewards[self.ts] = reward
+        self.ts = (self.ts + 1 ) % self.frequency
+
+        if self.ts == 0:
+
+            if self.verbose:
+                tqdm.write(f"> Average reward: {self.rewards.mean():.3f}")
+
+            # with open(self.filename, "a") as fout:
+            #     fout.write("\n".join(map(str, self.rewards)))
+            #     fout.write("\n")
+
+
+        return False
 
 
 

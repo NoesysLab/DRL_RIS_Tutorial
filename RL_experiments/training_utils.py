@@ -242,11 +242,19 @@ def plot_loss(loss_values, agent_name, scale='linear', figsize=(16,9), smooth_si
     plt.show()
 
 
-def plot_training_performance(reward_values, iteration_timesteps, name=None, random_avg_reward=None, optimal_avg_reward=None, smooth_sigma=None):
+
+def moving_average(x, w):
+    if w % 2 != 1: w+=1
+
+    cumsum_vec = np.cumsum(np.insert(x, 0, 0))
+    return (cumsum_vec[w:] - cumsum_vec[:-w]) / w
+
+def plot_training_performance(reward_values, iteration_timesteps=None, name=None, random_avg_reward=None, optimal_avg_reward=None, smooth_sigma=None):
     sns.set_theme()
 
     name = name if name is not None else 'Trained agent'
 
+    iteration_timesteps = np.arange(1, len(reward_values)+1)
 
     plt.plot(iteration_timesteps, reward_values, alpha=.7, label=name)
 
@@ -258,8 +266,9 @@ def plot_training_performance(reward_values, iteration_timesteps, name=None, ran
 
 
     if smooth_sigma is not None:
-        ysmoothed = gaussian_filter1d(reward_values, sigma=smooth_sigma)
-        plt.plot(iteration_timesteps, ysmoothed, label=f'{name} (smoothed)')
+        #ysmoothed = gaussian_filter1d(reward_values, sigma=smooth_sigma)
+        ysmoothed  = moving_average(reward_values, int(smooth_sigma))
+        plt.plot(iteration_timesteps[:len(ysmoothed)], ysmoothed, label=f'{name} (smoothed)')
 
     plt.legend()
 
@@ -271,54 +280,37 @@ def plot_training_performance(reward_values, iteration_timesteps, name=None, ran
 
 
 
-def save_results(agent_name            : str,
-                 setupParams           : dict,
+def save_results(setupParams           : dict,
                  agentParams           : dict,
                  reward_list           : list,
+                 eval_reward_values    : list,
                  eval_steps            : list,
                  results_dict          : dict,
-                 setup_dirname_params  : str,
-                 agent_dirname_params  : str,
-                 results_rootdir        = './results/',
+                 setup_dirname         : str,
+                 agent_dirname         : str,
                  ):
 
-    def to_format_string(s):
-        out = ''
-        for variable in s.split(','):
-            out += "_" + variable + "_{" + variable +"}"
-        return out
 
-    def generate_dirname(dirname_params, values_dict, prefix=''):
-        fstring = to_format_string(dirname_params)
-        dirname = fstring.format(**values_dict)
-        if prefix:
-            dirname = prefix + "_" + dirname
-        return dirname + "/"
-
-    setup_dirname = generate_dirname(setup_dirname_params, setupParams, prefix='setup')
-    agent_dirname = generate_dirname(agent_dirname_params, agentParams, prefix=agent_name)
-
-    all_dirs = os.path.join(results_rootdir, setup_dirname, agent_dirname)
-    os.makedirs(all_dirs, exist_ok=True)
-
-    with open(os.path.join(results_rootdir, setup_dirname, 'setup.json'), 'w') as fout:
+    with open(os.path.join(setup_dirname, 'setup.json'), 'w') as fout:
         fout.write(json.dumps(setupParams, indent=4), )
 
-    with open(os.path.join(results_rootdir, setup_dirname, agent_dirname, 'agent_params.json'), 'w') as fout:
+    with open(os.path.join(agent_dirname, 'agent_params.json'), 'w') as fout:
         fout.write(json.dumps(agentParams, indent=4))
 
-    with open(os.path.join(results_rootdir, setup_dirname, agent_dirname, 'agent_performance.json'), 'w') as fout:
+    with open(os.path.join(agent_dirname, 'agent_performance.json'), 'w') as fout:
         fout.write(json.dumps(results_dict, indent=4))
 
-    with open(os.path.join(results_rootdir, setup_dirname, agent_dirname, 'agent_training.csv'), 'w') as fout:
+    with open(os.path.join(agent_dirname, 'agent_training.csv'), 'w') as fout:
         pd.DataFrame({
-            'iteration' : eval_steps,
+            'iteration' : range(1, len(reward_list)+1),
             'reward'    : reward_list,
         }).to_csv(fout, index=False)
 
-
-
-
+    with open(os.path.join(agent_dirname, 'agent_evaluation.csv'), 'w') as fout:
+        pd.DataFrame({
+            'iteration': eval_steps,
+            'reward'   : eval_reward_values,
+        }).to_csv(fout, index=False)
 
 
 def cond_print(print_, *args, **kwargs):
@@ -353,11 +345,13 @@ def display_and_save_results(agent,
                              avg_score,
                              std_return,
                              reward_values,
+                             eval_reward_values,
                              eval_steps,
                              losses,
-                             smooth_sigma=5,
-                             agent_params_in_dirname="num_iterations,learning_rate",
-                             results_rootdir='./results/'):
+                             smooth_sigma,
+                             setup_dirname,
+                             agent_dirname,
+                             ):
 
 
     plot_loss(losses, agent.name)
@@ -373,10 +367,10 @@ def display_and_save_results(agent,
 
     cond_print(agent_params.verbose, "Saving results...")
 
-    save_results(agent.name,
-                 params['SETUP'],
+    save_results(params['SETUP'],
                  asdict(agent_params),
                  reward_values,
+                 eval_reward_values,
                  eval_steps,
                  {
                      "avg_score": avg_score,
@@ -385,9 +379,8 @@ def display_and_save_results(agent,
                      "score_as_percentage_of_random": score_as_percentage_of_random,
                      "score_as_percentage_of_optimal": score_as_percentage_of_optimal
                  },
-                 "N_controllable,K,M,codebook_rays_per_RX,kappa_H,observation_noise_variance",
-                 agent_params_in_dirname,
-                 results_rootdir
+                 setup_dirname,
+                 agent_dirname,
                  )
 
     send_notification(
