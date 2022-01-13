@@ -15,7 +15,7 @@ from tqdm import tqdm
 from termcolor import colored
 
 
-from RL_experiments.environments import RISEnv2
+from RL_experiments.environments import RISEnv2, RateRequestsEnv, RateQoSEnv
 from RL_experiments.standalone_simulatiion import Setup
 from RL_experiments.training_utils import Agent, compute_baseline_scores, display_and_save_results
 
@@ -170,7 +170,7 @@ class Experiment:
     def run(self, agent_or_agent_class, agent_params_class=None, agent_params_JSON_key=None):
 
 
-        env                 = RISEnv2(self.setup, episode_length=np.inf)
+        env                 = RateQoSEnv(self.setup, episode_length=np.inf)
         num_actions         = env.action_spec().maximum + 1
         self.num_iterations = int(self.num_iterations * num_actions)
 
