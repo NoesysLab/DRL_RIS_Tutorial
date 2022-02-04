@@ -51,6 +51,9 @@ class RISEnv2(py_environment.PyEnvironment):
                                                       dtype=np.float32,
                                                       name='observation')
 
+        ################# K ###################
+        self._info = {}
+
 
     def _calculate_space_dimensions(self):
 
@@ -169,6 +172,10 @@ class RISEnv2(py_environment.PyEnvironment):
         H, G, h = simulate_transmission(self.setup)
         self._state = (H, G, h)
         obs = self.generate_observation_vector(H, G, h)
+
+        ################# K ###################
+        self._info = {}
+
         return ts.restart(obs)
 
     def _step(self, action):
@@ -187,8 +194,12 @@ class RISEnv2(py_environment.PyEnvironment):
         reward        = self.compute_reward(H, G, h, Phi, W)
         H, G, h       = simulate_transmission(self.setup)
         observation   = self.generate_observation_vector(H, G, h)
+
         self._state   = (H, G, h)
         self._t      += 1
+        ################# K ###################
+        self._info    = {'t': self._t-1, 'configuration': configuration, 'W': W}
+
 
         if self.episode_length is not None and self._t >= self.episode_length:
             self._episode_ended = True
@@ -198,7 +209,8 @@ class RISEnv2(py_environment.PyEnvironment):
 
 
     def get_info(self) -> Any:
-        raise NotImplemented
+        ################# K ###################
+        return self._info
 
 
 # -------------------------------------------------------------
@@ -206,6 +218,7 @@ class RISEnv2(py_environment.PyEnvironment):
 
 
 
+################# K ###################
 class RateRequestsEnv(RISEnv2):
 
     def compute_reward(self, H, G, h, RIS_profiles, W):
@@ -213,24 +226,25 @@ class RateRequestsEnv(RISEnv2):
                                      H, G, h,
                                      RIS_profiles,
                                      W)
+        requests_penalty = np.clip(SINR-self.setup.rate_requests, a_min=None, a_max=0).sum()
+        self._info['SINR'] = SINR
+        return requests_penalty
 
-        return np.clip(SINR-self.setup.rate_requests, a_min=None, a_max=0).sum()
 
 
-class RateQoSEnv(RISEnv2):
+################# K ###################
+class RateQoSEnv(RateRequestsEnv):
 
     def compute_reward(self, H, G, h, RIS_profiles, W):
-        SINR = compute_SINR_per_user(self.setup,
-                                     H, G, h,
-                                     RIS_profiles,
-                                     W)
+        requests_penalty = super().compute_reward(H, G, h, RIS_profiles, W)
 
-        qos = np.clip(SINR-self.setup.rate_requests, a_min=None, a_max=0).sum()
+        SINR = self._info['SINR']
+        self._info['requests_penalties'] = np.clip(SINR-self.setup.rate_requests, a_min=None, a_max=0)
 
-        if qos >= 0:
+        if requests_penalty >= 0:
             return compute_sum_rate(SINR)
         else:
-            return qos
+            return requests_penalty
 
 
 

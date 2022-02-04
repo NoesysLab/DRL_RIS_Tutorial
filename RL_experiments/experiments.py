@@ -1,6 +1,8 @@
 import dataclasses
 import os
 
+from utils.misc import lod_2_dol, smooth_curve
+
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import tensorflow as tf
 
@@ -8,7 +10,7 @@ import tensorflow as tf
 import json
 import os
 from abc import ABC
-from typing import Iterable, List
+from typing import Iterable, List, Dict
 
 import numpy as np
 from tqdm import tqdm
@@ -204,6 +206,8 @@ class Experiment:
                                  self.optimal_score, avg_score, std_return, reward_values, eval_reward_values,
                                  eval_steps, losses, self.plot_smooth_sigma, self.setup_dirname, self.agent_dirname)
 
+        plot_rate_requests_penalties(self.training_callbacks[-1].infos, env)
+
 
         return agent, info
 
@@ -259,12 +263,18 @@ class HistoryCallback(ConvergenceCallback):
         self.actions      = []
         self.rewards      = []
 
+        ################# K ###################
+        self.infos = []
 
-    def __call__(self, step, obs=None, action=None, reward=None, **kwargs):
+
+    def __call__(self, step, obs=None, action=None, reward=None, info=None, **kwargs):
         self.steps.append(step)
         self.observations.append(obs)
         self.actions.append(action)
         self.rewards.append(reward)
+
+        ################# K ###################
+        self.infos.append(info)
 
         return False # never converges due to this function
 
@@ -301,5 +311,35 @@ class RewardMonitoringCallback(ConvergenceCallback):
 
 
 
+
+################# K ###################
+def plot_rate_requests_penalties(training_info: List[Dict], env: RateRequestsEnv):
+    import matplotlib.pyplot as plt
+    from matplotlib.cm import get_cmap
+
+
+    info = lod_2_dol(training_info[-300:-10], numpy=True)
+
+    colors = get_cmap('Pastel1').colors
+
+    fig = plt.figure()
+    ys  = np.empty_like(info['requests_penalties'])
+
+    for i in range(env.setup.K):
+        y = info['requests_penalties'][:,i]
+        y = env.setup.rate_requests[i] + y
+        y = smooth_curve(y, 50, 5)
+        plt.plot(info['t'], y, label=f'UE {i}', c=colors[i])
+        plt.hlines(y=env.setup.rate_requests[i], xmin=info['t'][0], xmax=info['t'][-1], linestyles='--', color=colors[i])
+        ys[:,i] = y
+
+
+    ys_avg = ys.mean(axis=1)
+    plt.plot(info['t'], ys_avg, c='k')
+
+    plt.xlabel('Time step')
+    plt.ylabel('SINR per user')
+    plt.legend()
+    plt.show(block=False)
 
 

@@ -84,7 +84,7 @@ class Agent:
 
 
 
-    def train(self, env, training_callbacks=None, eval_callbacks=None):
+    def train(self, env: RISEnv2, training_callbacks=None, eval_callbacks=None):
         if training_callbacks is None: training_callbacks = []
         if eval_callbacks is None: eval_callbacks = []
 
@@ -138,7 +138,7 @@ class Agent:
                         break
 
 
-                converged_flag, converged_callback_names = apply_callbacks(training_callbacks, step, obs, action, reward)
+                converged_flag, converged_callback_names = apply_callbacks(training_callbacks, step, obs, action, reward, info=env.get_info())
                 if converged_flag:
                     tqdm.write(f"Step={step} | Algorithm converged due to criteria: {converged_callback_names}")
                     break
