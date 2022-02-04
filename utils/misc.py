@@ -4,6 +4,10 @@ import numpy as np
 from utils.custom_types import *
 
 
+def cond_print(print_, *args, **kwargs):
+    if print_:
+        print(*args, **kwargs)
+
 
 def normalize_array(a: np.array)->np.array:
     return (a - a.min())/(a.max()-a.min())
@@ -154,6 +158,63 @@ def fmt_position(position: Vector3D)-> str:
 
 
 
+def split_filename_to_name_and_extension(filename: str)->(str, str):
+    fname_parts = filename.split('.')
+    fname_ext = fname_parts[-1]
+    fname_no_ext = ".".join(fname_parts[:-1])
+    return fname_no_ext, fname_ext
+
+
+
+def append_to_tuple(t: Tuple, val, pos=None):
+    l = list(t)
+
+    if pos is None:
+      l.append(val)
+      return tuple(l)
+
+    elif pos < 0:
+        raise ValueError
+
+    else:
+        l_left  = l[:pos]
+        l_right = l[pos:]
+        l_new   = l_left + [val] + l_right
+        return tuple(l_new)
+
+
+def to_format_string(s: VarsString):
+    out = ''
+    for variable in s.split(','):
+        if variable == "": continue
+        variable_names = variable.split(":")
+        if len(variable_names) == 1:
+            out += "_" + variable + "_{" + variable + "}"
+        elif len(variable_names) == 2:
+            if variable_names[1] == "":
+                out += "_{" + variable_names[0] + "}"
+            else:
+                out += "_" + variable_names[1] + "_{" + variable_names[0] + "}"
+        else:
+            raise ValueError("Bad format in VarString: More than one ':' delimiters in variable")
+
+    return out
+
+
+def generate_dirname(dirname_params: VarsString, values_dict: dict, prefix=''):
+    fstring = to_format_string(dirname_params)
+    dirname = fstring.format(**values_dict)
+
+    if prefix and dirname:
+        dirname = prefix + dirname + "/"
+    elif prefix:
+        dirname = prefix + "/"
+    elif dirname:
+        dirname = dirname[1:] + "/"
+    else:
+        dirname = ""
+
+    return dirname
 
 
 

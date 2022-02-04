@@ -21,7 +21,7 @@ def bin2int(b):
 try:
     filename = sys.argv[1]
 except IndexError:
-    filename = 'parameters.json'
+    filename = '../parameters.json'
 
 
 with open(filename, 'r') as f:

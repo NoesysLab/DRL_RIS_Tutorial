@@ -17,3 +17,6 @@ ComplexVector       = NewType('ComplexVector', np.ndarray)         # An 1D array
 ComplexMatrix2D     = NewType('ComplexMatrix2D', np.ndarray)       # A  2D array of dtype=complex
 ComplexMatrix3D     = NewType('ComplexMatrix3D', np.ndarray)       # A  3D array of dtype=complex
 ComplexArray        = NewType('ComplexArray'   , np.ndarray)       # A numpy array of dtype=complex and arbitrary shape
+
+
+VarsString          = NewType('VarsString', str)

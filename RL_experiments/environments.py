@@ -1,18 +1,31 @@
 import itertools
+import os
 import sys
-from typing import Any
+from typing import Any, Tuple, Union
 
 from tqdm import tqdm
 
-from RL_experiments.standalone_simulatiion import Setup, compute_sum_rate, compute_SINR_per_user, simulate_transmission
+from RL_experiments.standalone_simulatiion import Setup, compute_sum_rate, compute_SINR_per_user, simulate_transmission, \
+    construct_precoding_matrix, get_BS_UEs_AoDs
 
 sys.path.insert(0,'..')
 
 import numpy as np
 from tf_agents.environments import py_environment
+from tf_agents.environments import tf_environment
+from tf_agents.environments import tf_py_environment
+from tf_agents.policies import tf_policy
 from tf_agents.specs import array_spec
+from tf_agents.specs import tensor_spec
 from tf_agents.trajectories import time_step as ts
+from tf_agents.policies import random_tf_policy
+from tf_agents.environments.tf_py_environment import TFPyEnvironment
 
+
+
+from utils.custom_configparser import CustomConfigParser
+from core import channels
+from utils.misc import ray_to_elevation_azimuth, append_to_tuple
 
 
 class RISEnv2(py_environment.PyEnvironment):
@@ -24,20 +37,23 @@ class RISEnv2(py_environment.PyEnvironment):
     def set_state(self, state: Any) -> None:
         raise NotImplemented
 
-    def __init__(self, setup: Setup, episode_length):
+    def __init__(self, setup: Setup, episode_length, observation_type: str):
         super(RISEnv2, self).__init__()
         self.setup = setup
 
         self.episode_length      = episode_length
         self._t                  = None
         self._episode_ended      = False
-        self._prev_configuration = None
+        self.observation_type    = observation_type
+
+
         self.observation_noise_variance = setup.observation_noise_variance
 
         self.num_RIS_configurations      = None
         self.codebook_size_bits_required = None
 
         self._state = None
+        self._curr_reward = 0
 
         action_dim, observation_dim = self._calculate_space_dimensions()
 
@@ -55,6 +71,11 @@ class RISEnv2(py_environment.PyEnvironment):
         self._info = {}
 
 
+
+    @property
+    def state(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        return self._state
+
     def _calculate_space_dimensions(self):
 
         M = self.setup.M
@@ -71,9 +92,18 @@ class RISEnv2(py_environment.PyEnvironment):
         action_dim                       = int(np.power(2, N_controllable + self.codebook_size_bits_required))
 
 
-        observation_dim = ((M * B * N) + (M * K * N) + (K * B)) *      2
-        #                   +-------+    +---------+   +------+  +---------+
-        #                       H             G           h       real+imag
+
+        if self.observation_type == 'channels':
+
+            observation_dim = ((M * B * N) + (M * K * N) + (K * B)) *      2
+            #                   +-------+    +---------+   +------+  +---------+
+            #                       H             G           h       real+imag
+
+        elif self.observation_type == 'angles':
+            observation_dim = 2*self.setup.K  # 2 AoD angles (azimuth and elevation) per RX (AoDs between Bs and UE)
+
+        else:
+            raise ValueError("Environment supports only 'channels', 'angles' as `observation_type`.")
 
         return action_dim, observation_dim
 
@@ -84,16 +114,26 @@ class RISEnv2(py_environment.PyEnvironment):
 
 
     def generate_observation_vector(self, H, G, h):
-        H   = H.flatten()
-        G   = G.flatten()
-        h   = h.flatten()
-        obs = np.concatenate([H.real, H.imag, G.real, G.imag, h.real, h.imag])
-        obs = obs.astype(np.float32).flatten()
 
-        if self.observation_noise_variance != 0:
-            obs += np.random.normal(loc=0, scale=self.observation_noise_variance, size=len(obs))
+        if self.observation_type == 'channels':
+            H   = H.flatten()
+            G   = G.flatten()
+            h   = h.flatten()
+            obs = np.concatenate([H.real, H.imag, G.real, G.imag, h.real, h.imag])
+            obs = obs.astype(np.float32).flatten()
 
-        return obs
+            if self.observation_noise_variance != 0:
+                obs += np.random.normal(loc=0, scale=self.observation_noise_variance, size=len(obs))
+
+            return obs
+
+        elif self.observation_type == 'angles':
+
+            AoDs = get_BS_UEs_AoDs(self.setup).flatten()
+            return AoDs.astype('float32')
+
+        else:
+            raise ValueError
 
     def compute_reward(self, H, G, h, RIS_profiles, W):
         SINR = compute_SINR_per_user(self.setup,
@@ -165,10 +205,21 @@ class RISEnv2(py_environment.PyEnvironment):
     def observation_spec(self):
         return self._observation_spec
 
+
+    def current_time_step(self) -> ts.TimeStep:
+        if self.state is not None:
+            H, G, h   = self.state
+            step_type = np.array(0, dtype='float32')
+            obs       = self.generate_observation_vector(H, G, h)
+            reward    = np.array(self._curr_reward, dtype='float32')
+            discount  = np.array(1, dtype='float32')
+            return ts.TimeStep(step_type, reward, discount, obs)
+        else:
+            return None
+
     def _reset(self):
         self._t = 0
         self._episode_ended = False
-        self._prev_configuration = np.zeros(shape=self._observation_spec.shape, dtype=np.float32)
         H, G, h = simulate_transmission(self.setup)
         self._state = (H, G, h)
         obs = self.generate_observation_vector(H, G, h)
@@ -194,8 +245,8 @@ class RISEnv2(py_environment.PyEnvironment):
         reward        = self.compute_reward(H, G, h, Phi, W)
         H, G, h       = simulate_transmission(self.setup)
         observation   = self.generate_observation_vector(H, G, h)
-
         self._state   = (H, G, h)
+        self._curr_reward = reward
         self._t      += 1
         ################# K ###################
         self._info    = {'t': self._t-1, 'configuration': configuration, 'W': W}
@@ -217,9 +268,173 @@ class RISEnv2(py_environment.PyEnvironment):
 
 
 
+class RISEnv3(RISEnv2):
+
+    def __init__(self, setup: Setup, observation_type:str, num_realizations: int, dirname: str, overwrite=False):
+        assert num_realizations > 0
+        super(RISEnv3, self).__init__(setup, np.inf, observation_type)
+
+        self.num_realizations          = num_realizations
+        self.save_dirname              = dirname
+        self.save_dirname_H            = os.path.join(self.save_dirname, 'H.npy')
+        self.save_dirname_G            = os.path.join(self.save_dirname, 'G.npy')
+        self.save_dirname_h            = os.path.join(self.save_dirname, 'h.npy')
+        #self.save_dirname_SINR         = os.path.join(self.save_dirname, 'SINR.npy')
+        self.save_dirname_BS_RX_angles = os.path.join(self.save_dirname, 'BS_RX_AoDs.npy')
+
+        self.H_all                     = None # type: np.ndarray
+        self.G_all                     = None # type: np.ndarray
+        self.h_all                     = None # type: np.ndarray
+        self.AoDs_all                  = None # type: np.ndarray
+
+
+        if not os.path.exists(self.save_dirname):
+            os.mkdir(self.save_dirname)
+
+        some_files_are_missing = False
+        for fname in [self.save_dirname_H, self.save_dirname_G, self.save_dirname_h, self.save_dirname_BS_RX_angles]:
+            if not os.path.exists(fname):
+                some_files_are_missing = True
+                break
+
+
+        if overwrite or some_files_are_missing or num_realizations is None:
+            self._generate_simulation_data()
+            self._save_simulation_data()
+        else:
+            self._load_simulation_data()
+
+
+
+
+    def _generate_simulation_data(self):
+
+        dummy_action = 0
+        _ = super()._reset()
+        H, G, h = self.state
+
+        H_all    = np.empty(shape=append_to_tuple(H.shape, self.num_realizations, pos=0), dtype=complex)
+        G_all    = np.empty(shape=append_to_tuple(G.shape, self.num_realizations, pos=0), dtype=complex)
+        h_all    = np.empty(shape=append_to_tuple(h.shape, self.num_realizations, pos=0), dtype=complex)
+        AoDs_all = np.zeros(shape=(self.num_realizations, 2*self.setup.K))
+
+        H_all[0, ...]    = H
+        G_all[0, ...]    = G
+        h_all[0, ...]    = h
+        AoDs_all[0, ...] = get_BS_UEs_AoDs(self.setup).flatten()
+
+        pbar = tqdm(range(1, self.num_realizations))
+        pbar.set_description('Generating Simulation data')
+        for i in pbar:
+            _               = super()._step(dummy_action)
+            H, G, h         = self.state
+            H_all[i,   ...] = H
+            G_all[i,   ...] = G
+            h_all[i,   ...] = h
+            AoDs_all[i,...] = get_BS_UEs_AoDs(self.setup).flatten()
+
+
+
+        self.H_all    = H_all
+        self.G_all    = G_all
+        self.h_all    = h_all
+        self.AoDs_all = AoDs_all
+
+
+    def _save_simulation_data(self):
+
+        if self.H_all is None or self.G_all is None or self.h_all is None or self.AoDs_all is None:
+            raise ValueError("Simulation data have not been generated")
+
+        os.makedirs(self.save_dirname, exist_ok=True)
+
+        np.save(self.save_dirname_H, self.H_all)
+        np.save(self.save_dirname_G, self.G_all)
+        np.save(self.save_dirname_h, self.h_all)
+        np.save(self.save_dirname_BS_RX_angles, self.AoDs_all)
+
+        print(f"Simulation data saved under {self.save_dirname}/ .")
+
+
+    def _load_simulation_data(self):
+        self.H_all = np.load(self.save_dirname_H)
+        self.G_all = np.load(self.save_dirname_G)
+        self.h_all = np.load(self.save_dirname_h)
+        self.AoDs_all = np.load(self.save_dirname_BS_RX_angles)
+
+        num_realizations_in_files = np.array(list(map(lambda a: a.shape[0], [self.H_all, self.G_all, self.h_all, self.AoDs_all])))
+
+        if np.any(num_realizations_in_files - num_realizations_in_files[0]):
+            raise ValueError("Loaded data with different number of realizations in each channel matrix!")
+
+        if num_realizations_in_files[0] == 0:
+            raise ValueError("Loaded empty data!")
+
+        self.num_realizations = num_realizations_in_files[0]
+        print(f"Loaded {self.num_realizations} simulation realizations from {self.save_dirname}/ .")
+
+
+    def _load_curr_realization(self, include_AoDs=False)->\
+            Union[Tuple[np.ndarray, np.ndarray, np.ndarray],
+                  Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]]:
+
+        t = self._t % self.num_realizations
+        H = self.H_all[t, ...]
+        G = self.G_all[t, ...]
+        h = self.h_all[t, ...]
+
+        if not include_AoDs:
+            return H, G, h
+        else:
+            AoDs = self.AoDs_all[t, ...]
+            return H, G, h, AoDs
+
+    def _reset(self):
+        self._t = 0
+        self._episode_ended = False
+        H, G, h = self._load_curr_realization()
+        self._state = (H, G, h)
+        obs = self.generate_observation_vector(H, G, h)
+        return ts.restart(obs)
+
+    def _step(self, action):
+        if self._episode_ended:
+            return self.reset()
+
+        codebook_selection, configuration = self.split_action_to_precoding_and_RIS_profile(action)
+
+        # configuration = self.action_2_configuration(action)
+        configuration     = self.extend_configuration_to_groups(configuration)
+        Phi               = self.configuration2phases(configuration)
+        W                 = self.select_beamforming_matrix(codebook_selection)
+        H, G, h           = self._state
+        reward            = self.compute_reward(H, G, h, Phi, W)
+        self._t          += 1
+        H, G, h           = self._load_curr_realization()
+        observation       = self.generate_observation_vector(H, G, h)
+        self._state       = (H, G, h)
+
+
+        if self.episode_length is not None and self._t >= self.episode_length:
+            self._episode_ended = True
+            return ts.termination(observation, reward)
+        else:
+            return ts.transition(observation, reward, discount=1.0)
+
+
+
+
+
+
+
+
+
+
+
+
 
 ################# K ###################
-class RateRequestsEnv(RISEnv2):
+class RateRequestsEnv(RISEnv3):
 
     def compute_reward(self, H, G, h, RIS_profiles, W):
         SINR = compute_SINR_per_user(self.setup,
@@ -249,7 +464,6 @@ class RateQoSEnv(RateRequestsEnv):
 
 
 
-# ----------------------------------------------------------------
 
 
 
@@ -257,30 +471,44 @@ class RateQoSEnv(RateRequestsEnv):
 
 
 
+
+
+
+
+
+def evaluate_action(env: RISEnv2, a: int):
+    (H, G, h) = env._state
+    codebook_selection, configuration = env.split_action_to_precoding_and_RIS_profile(a)
+    configuration                     = env.extend_configuration_to_groups(configuration)
+    Phi                               = env.configuration2phases(configuration)
+    W                                 = env.select_beamforming_matrix(codebook_selection)
+    r                                 = env.compute_reward(H, G, h, Phi, W)
+    return r
+
+def find_best_action_exhaustively(env: RISEnv2):
+    r_max = -float('inf')
+    a_best = -1
+    for a in range(env.action_spec().maximum):
+        r = evaluate_action(env, a)
+        if r > r_max:
+            r_max, a_best = r, a
+
+    return r_max, a_best
 
 def compute_average_optimal_policy_return(env: RISEnv2, timesteps=1000):
 
     total_return = 0
     _ = env._reset()
 
-
     for _ in tqdm(range(timesteps)):
-        r_max  = -float('inf')
-        a_best = -1
-        (H, G, h) = env._state
-        for a in range(env.action_spec().maximum):
-            codebook_selection, configuration = env.split_action_to_precoding_and_RIS_profile(a)
-            configuration                     = env.extend_configuration_to_groups(configuration)
-            Phi                               = env.configuration2phases(configuration)
-            W                                 = env.select_beamforming_matrix(codebook_selection)
-            r                                 = env.compute_reward(H, G, h, Phi, W)
-            if r > r_max:
-                r_max, a_best = r, a
-
+        r_max, a_best = find_best_action_exhaustively(env)
         total_return += r_max
         _ = env._step(a_best)
 
     return total_return / timesteps
+
+
+
 
 
 

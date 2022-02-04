@@ -40,12 +40,12 @@ def tqdm_(iterator, *args, verbose_=True, **kwargs,):
 
 @dataclass
 class AgentParams:
-    num_iterations    : int  = None
-    num_evaluations   : int  = None
-    eval_interval     : int  = None
-    num_eval_episodes : int  = None
-    verbose           : bool = None
-    vals_in_dirname   : str  = None
+    num_iterations    : int         = None
+    num_evaluations   : int         = None
+    eval_interval     : int         = None
+    num_eval_episodes : int         = None
+    verbose           : bool        = None
+    vals_in_dirname   : VarsString  = None
 
     def __post_init__(self):
         if self.eval_interval is not None and self.num_evaluations is not None:
@@ -54,11 +54,12 @@ class AgentParams:
 
 class Agent:
 
-    def __init__(self, name: str, params: AgentParams, num_actions, observation_dim):
-        self.name            = name
-        self.params          = params
-        self.num_actions     = num_actions
-        self.observation_dim = observation_dim
+    def __init__(self, name: str, params: AgentParams, num_actions, observation_dim, observation_type):
+        self.name             = name
+        self.params           = params
+        self.num_actions      = num_actions
+        self.observation_dim  = observation_dim
+        self.observation_type = observation_type
 
         if self.params.eval_interval is None:
             self.eval_interval = self.params.num_iterations // self.params.num_evaluations
@@ -73,7 +74,7 @@ class Agent:
     def collect_policy(self):
         raise NotImplemented
 
-    def _initialize_training_vars(self):
+    def _initialize_training_vars(self, env: RISEnv2):
         raise NotImplementedError
 
     def _apply_collect_step(self, step, obs, action, reward)->None:
@@ -90,16 +91,17 @@ class Agent:
 
 
 
-        self._initialize_training_vars()
+        self._initialize_training_vars(env)
 
         rewards      = []
         reward_steps = []
         losses       = []
 
-        initial_reward, _ = self.evaluate(env)
+        #initial_reward, _ = self.evaluate(env)
+        #rewards.append(initial_reward)
+        #reward_steps.append(0)
 
-        rewards.append(initial_reward)
-        reward_steps.append(0)
+        if self.params.verbose: print('Starting training')
 
         time_step = env._reset()
 
@@ -110,8 +112,6 @@ class Agent:
                     time_step = env._reset()
 
 
-                # action_step   = self.collect_policy(time_step)
-                # next_time_step = env.step(action_step.action)
 
                 obs       = time_step.observation
                 action    = self.collect_policy(obs)
@@ -138,7 +138,7 @@ class Agent:
                         break
 
 
-                converged_flag, converged_callback_names = apply_callbacks(training_callbacks, step, obs, action, reward, info=env.get_info())
+                converged_flag, converged_callback_names = apply_callbacks(training_callbacks, step, obs, action, reward, info=env.get_info(), loss=this_step_losses)
                 if converged_flag:
                     tqdm.write(f"Step={step} | Algorithm converged due to criteria: {converged_callback_names}")
                     break
@@ -152,16 +152,21 @@ class Agent:
 
 
 
-    def evaluate(self, env: RISEnv2, return_info=False):
+    def evaluate(self, env: RISEnv2, return_info=False, n_iters=None):
 
+        n_iters = self.params.num_eval_episodes if n_iters is None else n_iters
 
-        rewards = np.empty((self.params.num_eval_episodes,))
-        time_step = env._reset()
+        rewards = np.empty((n_iters,))
+        #time_step = env._reset()
+        time_step = env.current_time_step()
 
         info = {'observation': [], 'action': [], 'reward': []}
 
-        for i in range(self.params.num_eval_episodes):
-            if time_step.is_last(): time_step = env._reset()
+
+
+        for i in range(n_iters):
+            if time_step.is_last():
+                time_step = env._reset()
 
             obs = time_step.observation
             action = self.policy(obs)
@@ -174,11 +179,15 @@ class Agent:
                 info['action'].append(action)
                 info['reward'].append(reward)
 
-        if return_info:
-            return rewards.mean(), rewards.std(), info
-        else:
-            return rewards.mean(), rewards.std()
+        if n_iters == 1:
+            if return_info: return rewards[0], info
+            else: return rewards[0]
 
+        else:
+            if return_info:
+                return rewards.mean(), rewards.std(), info
+            else:
+                return rewards.mean(), rewards.std()
 
 
 
@@ -225,7 +234,7 @@ def compute_avg_return(environment, policy, num_timesteps=100):
 
 
 
-def plot_loss(loss_values, agent_name, scale='linear', figsize=(16,9), smooth_sigma=None):
+def plot_loss(loss_values, agent_name, scale='linear', figsize=(16,9), smooth_sigma=None, savefile=None):
     plt.figure(figsize=figsize)
     x = np.arange(1, len(loss_values)+1)
     plt.plot(x, loss_values, label='original values')
@@ -239,22 +248,21 @@ def plot_loss(loss_values, agent_name, scale='linear', figsize=(16,9), smooth_si
     plt.ylabel('Train loss')
     plt.yscale(scale)
     plt.title(f'{agent_name} training loss')
-    plt.show()
+
+    if savefile is not None:
+        plt.savefig(savefile)
+
+    try:
+        plt.show(block=False)
+    except Exception as e:
+        print(f"Warning: Exception during showing figure! \n\n{e}\n")
 
 
-
-def moving_average(x, w):
-    if w % 2 != 1: w+=1
-
-    cumsum_vec = np.cumsum(np.insert(x, 0, 0))
-    return (cumsum_vec[w:] - cumsum_vec[:-w]) / w
-
-def plot_training_performance(reward_values, iteration_timesteps=None, name=None, random_avg_reward=None, optimal_avg_reward=None, smooth_sigma=None):
+def plot_training_performance(reward_values, iteration_timesteps, name=None, random_avg_reward=None, optimal_avg_reward=None, smooth_sigma=None, savefile=None):
     sns.set_theme()
 
     name = name if name is not None else 'Trained agent'
 
-    iteration_timesteps = np.arange(1, len(reward_values)+1)
 
     plt.plot(iteration_timesteps, reward_values, alpha=.7, label=name)
 
@@ -266,56 +274,77 @@ def plot_training_performance(reward_values, iteration_timesteps=None, name=None
 
 
     if smooth_sigma is not None:
-        #ysmoothed = gaussian_filter1d(reward_values, sigma=smooth_sigma)
-        ysmoothed  = moving_average(reward_values, int(smooth_sigma))
-        plt.plot(iteration_timesteps[:len(ysmoothed)], ysmoothed, label=f'{name} (smoothed)')
+        ysmoothed = gaussian_filter1d(reward_values, sigma=smooth_sigma)
+        plt.plot(iteration_timesteps, ysmoothed, label=f'{name} (smoothed)')
 
     plt.legend()
 
     plt.ylabel('Reward')
     plt.xlabel('Number of Iterations')
-    plt.show(block=False)
+
+    if savefile is not None:
+        plt.savefig(savefile)
+
+    try:
+        plt.show(block=False)
+    except Exception as e:
+        print(f"Warning: Exception during showing figure! \n\n{e}\n")
 
 
 
 
 
-def save_results(setupParams           : dict,
+def save_results(agent_name            : str,
+                 setupParams           : dict,
                  agentParams           : dict,
                  reward_list           : list,
-                 eval_reward_values    : list,
                  eval_steps            : list,
                  results_dict          : dict,
-                 setup_dirname         : str,
-                 agent_dirname         : str,
+                 setup_dirname_params  : str,
+                 agent_dirname_params  : str,
+                 results_rootdir        = './results/',
                  ):
 
+    def to_format_string(s):
+        out = ''
+        for variable in s.split(','):
+            out += "_" + variable + "_{" + variable +"}"
+        return out
 
-    with open(os.path.join(setup_dirname, 'setup.json'), 'w') as fout:
+    def generate_dirname(dirname_params, values_dict, prefix=''):
+        fstring = to_format_string(dirname_params)
+        dirname = fstring.format(**values_dict)
+        if prefix:
+            dirname = prefix + "_" + dirname
+        return dirname + "/"
+
+    setup_dirname = generate_dirname(setup_dirname_params, setupParams, prefix='setup')
+    agent_dirname = generate_dirname(agent_dirname_params, agentParams, prefix=agent_name)
+
+    all_dirs = os.path.join(results_rootdir, setup_dirname, agent_dirname)
+    os.makedirs(all_dirs, exist_ok=True)
+
+    with open(os.path.join(results_rootdir, setup_dirname, 'setup.json'), 'w') as fout:
         fout.write(json.dumps(setupParams, indent=4), )
 
-    with open(os.path.join(agent_dirname, 'agent_params.json'), 'w') as fout:
+    with open(os.path.join(results_rootdir, setup_dirname, agent_dirname, 'agent_params.json'), 'w') as fout:
         fout.write(json.dumps(agentParams, indent=4))
 
-    with open(os.path.join(agent_dirname, 'agent_performance.json'), 'w') as fout:
+    with open(os.path.join(results_rootdir, setup_dirname, agent_dirname, 'agent_performance.json'), 'w') as fout:
         fout.write(json.dumps(results_dict, indent=4))
 
-    with open(os.path.join(agent_dirname, 'agent_training.csv'), 'w') as fout:
+    with open(os.path.join(results_rootdir, setup_dirname, agent_dirname, 'agent_training.csv'), 'w') as fout:
         pd.DataFrame({
-            'iteration' : range(1, len(reward_list)+1),
+            'iteration' : eval_steps,
             'reward'    : reward_list,
         }).to_csv(fout, index=False)
 
-    with open(os.path.join(agent_dirname, 'agent_evaluation.csv'), 'w') as fout:
-        pd.DataFrame({
-            'iteration': eval_steps,
-            'reward'   : eval_reward_values,
-        }).to_csv(fout, index=False)
 
 
-def cond_print(print_, *args, **kwargs):
-    if print_:
-        print(*args, **kwargs)
+
+
+
+
 
 
 
@@ -345,13 +374,11 @@ def display_and_save_results(agent,
                              avg_score,
                              std_return,
                              reward_values,
-                             eval_reward_values,
                              eval_steps,
                              losses,
-                             smooth_sigma,
-                             setup_dirname,
-                             agent_dirname,
-                             ):
+                             smooth_sigma=10,
+                             agent_params_in_dirname="num_iterations,learning_rate",
+                             results_rootdir='./results/'):
 
 
     plot_loss(losses, agent.name)
@@ -367,10 +394,10 @@ def display_and_save_results(agent,
 
     cond_print(agent_params.verbose, "Saving results...")
 
-    save_results(params['SETUP'],
+    save_results(agent.name,
+                 params['SETUP'],
                  asdict(agent_params),
                  reward_values,
-                 eval_reward_values,
                  eval_steps,
                  {
                      "avg_score": avg_score,
@@ -379,8 +406,9 @@ def display_and_save_results(agent,
                      "score_as_percentage_of_random": score_as_percentage_of_random,
                      "score_as_percentage_of_optimal": score_as_percentage_of_optimal
                  },
-                 setup_dirname,
-                 agent_dirname,
+                 "N_controllable,K,M,codebook_rays_per_RX,kappa_H,observation_noise_variance",
+                 agent_params_in_dirname,
+                 results_rootdir
                  )
 
     send_notification(
