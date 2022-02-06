@@ -43,10 +43,10 @@ class UCBParams(AgentParams):
 class UCBAgent(Agent):
 
 
-    def __init__(self, params: UCBParams, num_actions, observation_dim):
+    def __init__(self, params: UCBParams, num_actions, observation_dim, observation_type="unused"):
 
 
-        super().__init__("UCB", params, num_actions, observation_dim)
+        super().__init__("UCB", params, num_actions, observation_dim, "")
         self.name         = "UCB"
         self.params       = params
         self._num_actions = num_actions
@@ -105,7 +105,7 @@ class UCBAgent(Agent):
         return self.ignore_observation_policy_wrapper(self.select_action)
 
 
-    def _initialize_training_vars(self):
+    def _initialize_training_vars(self, env: RISEnv2):
         self.Q = 1 + np.random.normal(loc=0, scale=0.001, size=(self._num_actions,))
         self.N = np.zeros((self._num_actions,), dtype=np.int32)
         self._t = 1
@@ -178,18 +178,18 @@ if __name__ == '__main__':
                    "UCB_PARAMS", )
 
     import seaborn as sns
-    # plt.figure()
-    # plt.bar(range(len(agent.Q)), agent.Q)
-    # plt.xlabel("Action index")
-    # plt.ylabel("rate")
-    # plt.title("UCB reward predictions after training")
-    # plt.show()
-    #
-    # plt.figure()
-    # plt.bar(range(len(agent.Q)), agent.N)
-    # plt.xlabel("Action index")
-    # plt.title("Number of times each action was selected during training")
-    # plt.show()
+    plt.figure()
+    plt.bar(range(len(agent.Q)), agent.Q)
+    plt.xlabel("Action index")
+    plt.ylabel("rate")
+    plt.title("UCB reward predictions after training")
+    plt.show(block=False)
+
+    plt.figure()
+    plt.bar(range(len(agent.Q)), agent.N)
+    plt.xlabel("Action index")
+    plt.title("Number of times each action was selected during training")
+    plt.show(block=False)
 
     #
     # def plot_eval_statistics(info):
@@ -215,6 +215,6 @@ if __name__ == '__main__':
     #
     #     if len(selected_actions) > 1:
     #         plt.bar(selected_actions, avg_rewards)
-    #         plt.show()
+    #         plt.show(block=False)
     #
     # plot_eval_statistics(info)

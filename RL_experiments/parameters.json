@@ -16,53 +16,77 @@
     "observation_noise_variance": 0,
     "ignore_direct_link"        : true,
     "direct_link_attenuation"   : 10,
+    "channel_coherence_time"    : 0.007,
 
-    "rate_requests"             : [0.4, 0.4]
+    // todo: removed 'variation_name', changed 'variation_parameters' to 'movement_parameters', 'introduced _TYPE_'. Take cases based on that
+
+    "movement_parameters"      : {
+      "starting_points"         : null,
+      "movement_directions"     : [45, -45],
+      "movement_speeds"         : [1.4, 1.4],
+      "travel_distances"        : [2,   2]
+    },
+
+    "rate_requests"             : [0.4, 0.4],
+
+    "_TYPE_"                    : "RATES/QOS/MOVEMENT"
   },
 
 
   "EXPERIMENT" : {
-    "num_iterations"              : 100,
+    "n_iters"                     : 50,
+    "n_evals"                     : 15,
     "num_eval_episodes"           : 300,
-    "num_evaluations"             : 10,
     "eval_interval"               : null,
     "verbose"                     : true,
     "plot_loss"                   : true,
     "plot_performance"            : true,
     "save_results"                : true,
-    "plot_smooth_sigma"           : 100,
-    "results_rootdir"             : "./results/QoS-constraints/",
+    "plot_smooth_sigma"           : true,
+    "observation_type"            : "channels",
+
+    "results_rootdir"             : "./results/Moving_UEs/",
+    "data_dirname"                : "Simulation_data",
+    "baselines_rootdir"           : "Baselines",
+    "agents_rootdir"              : "Agents",
     "use_cached_baselines"        : false,
+
+
     "convergence"                 : [
       {"upper_bound_percentage"   : {"fraction":  0.99, "n_iters":  5} },
       {"reward_monitoring"        : {"frequency": 1000}}
     ],
-    "vars_in_dirname"             : "N_controllable,K,M,codebook_rays_per_RX,kappa_H,rate_requests"
+
+
+    "experiment_dir_vars"         : "N_controllable:N_contr,kappa_H",
+    "baselines_dir_vars"          : "n_iters,n_evals",
+    "agent_dir_vars"              : "observation_type:,n_iters,n_evals",
+
+    "num_cached_realizations"     : 210000,
+    "baselines_performance_files" : "evaluation_performance.csv"
   },
+
 
 
   "NEURAL_SOFTMAX_PARAMS"  : {
     "fc_layer_params"                  : [32, 32],
     "dropout_p"                        : 0.2,
     "steps_per_loop"                   : 1,
-    "batch_size"                       : 1,
+    "batch_size"                       : 32,
     "learning_rate"                    : 1e-3,
     "Boltzmann_tau"                    : 0.6 ,
     "tau_change"                       : "constant",
     "tau_initial"                      : null,
     "tau_final"                        : null,
-    "vals_in_dirname"                  : "num_iterations,learning_rate,Boltzmann_tau"
+    "vals_in_dirname"                  : "learning_rate,Boltzmann_tau"
   },
 
 
   "UCB_PARAMS" : {
-    "alpha"            : 10,
-    "gamma"            : 1.0,
-    "num_evaluations"  : 10,
-    "num_iterations"   : 100,
-    "num_eval_episodes": 300,
+    "alpha"            : 0.6,
+    "gamma"            : 0.75,
     "verbose"          : true,
-    "vals_in_dirname"  : "num_iterations,alpha"
+    "vals_in_dirname"  : "alpha,gamma"
   },
 
   "DQN_PARAMS" : {
@@ -82,7 +106,11 @@
     "gamma"                      : 0.99,
     "td_errors_loss_fn"          : "element_wise_squared_loss",
     "verbose"                    : true,
-    "vals_in_dirname"            : "num_iterations,learning_rate,target_update_tau,log_interval"
+    "vals_in_dirname"            : "learning_rate,target_update_tau"
+  },
+
+  "DUMMY_PARAMS" : {
+    "vals_in_dirname" : ""
   }
 
 }
