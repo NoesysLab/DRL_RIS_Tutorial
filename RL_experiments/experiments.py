@@ -440,7 +440,7 @@ class HistoryCallback(TrainingCallback):
         ################# K ###################
         self.infos = []
 
-    def __call__(self, step, obs=None, action=None, reward=None, loss=None, **kwargs):
+    def __call__(self, step, obs=None, action=None, reward=None, loss=None, info=None, **kwargs):
         self.steps.append(int(step))
         self.observations.append(obs if self.save_observations else None)
         self.actions.append(int(action))
@@ -536,36 +536,6 @@ class HistoryCallback(TrainingCallback):
             print(f"Warning: Exception during showing figure! \n\n{e}\n")
 
 
-
-
-class RewardMonitoringCallback(ConvergenceCallback):
-    def __init__(self, frequency=50, filename=None, verbose=True):
-        super(RewardMonitoringCallback, self).__init__("Exploration Evaluation")
-        self.frequency = frequency
-        self.ts = 0
-        self.verbose = verbose
-        self.rewards = np.zeros(self.frequency)
-        self.filename = filename
-
-
-
-    def __call__(self,  step, obs=None, action=None, reward=None, **kwargs):
-        if reward is None: raise ValueError
-
-        self.rewards[self.ts] = reward
-        self.ts = (self.ts + 1 ) % self.frequency
-
-        if self.ts == 0:
-
-            if self.verbose:
-                tqdm.write(f"> Average reward: {self.rewards.mean():.3f}")
-
-            # with open(self.filename, "a") as fout:
-            #     fout.write("\n".join(map(str, self.rewards)))
-            #     fout.write("\n")
-
-
-        return False
 
 
 

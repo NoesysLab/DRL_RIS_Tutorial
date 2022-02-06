@@ -180,7 +180,7 @@ class Setup:
     N_controllable             : int                                       # Total number of RIS element groups, calculated as N_tot / group_size. This can be thought of as the number of individually controlled elements.
     kappa_H                    : float                                     # BS-RIS Ricean factor (dB)
     kappa_G                    : float                                     # RIS-RX Ricean factor (dB)
-    rate_requests              : np.ndarray                                # Shape (K)
+    rate_requests              : np.ndarray = None                         # Shape (K)
     BS_position                : np.ndarray = dcArray([10, 5 , 2.0])
     RIS_positions              : np.ndarray = dcArray([[7.5, 13, 2.0], [12.5,  13,    2.0]])
     RX_box                     : np.ndarray = dcArray([ [7.5, 11.0, 1.5],  [12.5,  16.0, 2.0] ])
