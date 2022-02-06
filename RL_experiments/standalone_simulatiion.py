@@ -25,8 +25,6 @@ class Variation(abc.ABC):
     def __init__(self, name: str, setup: Setup):
         self.setup  = setup                                       # type: Setup
         self._name  = name                                        # type: str
-        self.params = self.setup.variation_parameters             # type: dict
-        if self.setup.variation_name != self._name: raise ValueError
 
 
     def reset(self):
@@ -97,7 +95,7 @@ class LinearMovement(Variation):
 
     def __init__(self, setup: Setup):
         super(LinearMovement, self).__init__("Moving_UEs", setup)
-
+        self.params                   = setup.movement_parameters
         self.movement_angles          = degree2rad( np.array(self.params['movement_directions']) )                      # type: np.ndarray
         self.movement_speeds          = self.setup.channel_coherence_time * np.array(self.params['movement_speeds'])    # type: np.ndarray
         self.travel_distances         = np.array(self.params['travel_distances'])                                       # type: np.ndarray
@@ -180,6 +178,7 @@ class Setup:
     N_controllable             : int                                       # Total number of RIS element groups, calculated as N_tot / group_size. This can be thought of as the number of individually controlled elements.
     kappa_H                    : float                                     # BS-RIS Ricean factor (dB)
     kappa_G                    : float                                     # RIS-RX Ricean factor (dB)
+    _type_                     : str
     rate_requests              : np.ndarray = None                         # Shape (K)
     BS_position                : np.ndarray = dcArray([10, 5 , 2.0])
     RIS_positions              : np.ndarray = dcArray([[7.5, 13, 2.0], [12.5,  13,    2.0]])
@@ -201,8 +200,8 @@ class Setup:
     d_BS_RX                    : np.ndarray = field(init=False)            # Shape: (K)
     variation_parameters       : dict       = None
     channel_coherence_time     : float      = None
-    variation_name             : str        = None
     variation                  : Variation  = field(init=False)
+    movement_parameters        : dict       = None
 
 
 
@@ -244,13 +243,16 @@ class Setup:
 
         #print(f'RXs are positioned at:\n{self.RX_positions}')
 
-        if self.variation_name == 'Moving_UEs':
+        if self._type_.lower() == 'movement':
             self.variation = LinearMovement(self)
             self.variation.apply_initialization()
         else:
             self.variation = DummyVariation(self)
             self.variation.apply_initialization()
             self.variation_name = 'Dummy'
+
+            if self._type_.lower() == 'qos':
+                if self.rate_requests is None: raise ValueError
 
 
 
