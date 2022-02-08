@@ -1,7 +1,7 @@
 import itertools
 import os
 import sys
-from typing import Any, Tuple, Union
+from typing import Any, Tuple, Union, Type
 
 from tqdm import tqdm
 
@@ -512,6 +512,14 @@ def compute_average_optimal_policy_return(env: RISEnv2, timesteps=1000):
 
 
 
+
+def get_environment_class_by_type(simulation_type: str)->Type:
+    if simulation_type.upper() == 'QOS':
+        return RateQoSEnv
+    elif simulation_type.upper() == 'REQUESTS':
+        return RateRequestsEnv
+    else:
+        return RISEnv3
 
 
 

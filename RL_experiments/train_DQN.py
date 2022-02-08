@@ -249,7 +249,7 @@ class DQNAgent(Agent):
 
 
 
-    def evaluate(self, env: Union[RISEnv2, TFPyEnvironment], return_info=False, n_iters=None):
+    def evaluate(self, env: Union[RISEnv2, TFPyEnvironment], return_info=False, n_iters=None, verbose=False):
         n_iters = self.params.num_eval_episodes if n_iters is None else n_iters
 
         if not isinstance(env, TFPyEnvironment):
@@ -264,7 +264,7 @@ class DQNAgent(Agent):
 
 
     @staticmethod
-    def compute_avg_return(environment, policy, num_timesteps=100):
+    def compute_avg_return(environment, policy, num_timesteps=100, verbose=False):
         """
         :param environment: A  TfPyEnvironment instance
         :param policy: A TFPolicy in
@@ -275,7 +275,8 @@ class DQNAgent(Agent):
         #time_step = environment.reset()
         time_step  = environment.current_time_step()
 
-        for ts_counter in range(num_timesteps):
+        iter = range(num_timesteps) if not verbose else tqdm(range(num_timesteps))
+        for ts_counter in iter:
             if  time_step.is_last():
                 time_step = environment.reset()
 

@@ -46,6 +46,12 @@ class OptimalAgent(Agent):
     def _perform_update_step(self) ->List:
         return []
 
+    def evaluate(self, env: RISEnv2, return_info=False, n_iters=None, verbose=False):
+        original_env = self.env
+        self.env = env
+        rewards_mean, rewards_std = super().evaluate(env, False, n_iters, verbose)
+        self.env = original_env
+        return rewards_mean, rewards_std
 
 
 if __name__ == '__main__':

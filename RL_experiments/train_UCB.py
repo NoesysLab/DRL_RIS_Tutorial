@@ -3,7 +3,7 @@ import os
 
 import matplotlib.pyplot as plt
 
-from RL_experiments.experiments import Experiment
+from RL_experiments.experiments import Experiment, LinearMovementExperiment, get_experiment_class_from_config
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import tensorflow as tf
@@ -172,7 +172,7 @@ if __name__ == '__main__':
     import sys
     params_filename = sys.argv[1]
 
-    exp = Experiment(params_filename)
+    exp = get_experiment_class_from_config(params_filename)
     agent, info = exp.run(UCBAgent,
                    UCBParams,
                    "UCB_PARAMS", )

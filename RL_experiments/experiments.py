@@ -19,14 +19,15 @@ import pandas as pd
 import json
 import os
 from abc import ABC
-from typing import Iterable, List, NewType, Dict
+from typing import Iterable, List, NewType, Dict, Tuple, Type
 
 import numpy as np
 from tqdm import tqdm
 from termcolor import colored
 
 
-from RL_experiments.environments import RISEnv2, find_best_action_exhaustively, evaluate_action, RISEnv3, RateRequestsEnv, RateQoSEnv
+from RL_experiments.environments import RISEnv2, find_best_action_exhaustively, evaluate_action, RISEnv3, \
+    RateRequestsEnv, RateQoSEnv, get_environment_class_by_type
 from RL_experiments.standalone_simulatiion import Setup
 from RL_experiments.training_utils import Agent, compute_baseline_scores, display_and_save_results, plot_loss, \
     AgentParams
@@ -69,6 +70,9 @@ class Experiment:
         self.baselines_performance_files  = self.exp_params['baselines_performance_files'] # type: str
         self.num_actions                  = None                                           # type: int
 
+
+        self.env_constructor              = get_environment_class_by_type(self.setup.TYPE)  # type: Type
+
         self._generate_dirnames()
 
         self.observation_type = self.observation_type.lower()
@@ -97,15 +101,7 @@ class Experiment:
         self.exhaustive_baseline_dirname = os.path.join(self.baselines_dirname, 'Exhaustive')
         self.random_baseline_dirname     = os.path.join(self.baselines_dirname, 'Random')
 
-    def _load_baseline_scores_from_saved_file(self):
-        try:
-            f = open(os.path.join(self.setup_dirname, "baselines.json"), "r")
 
-            baseline_results = json.loads(f.read())
-
-            self.optimal_score                = baseline_results['optimal_score']
-            self.random_policy_average_return = baseline_results['random_policy_average_return']
-            self.std_return                   = baseline_results['std_return']
 
     def _generate_agent_dirname(self, agent: Agent):
         agent_dirname = generate_dirname(agent.params.vals_in_dirname, asdict(agent.params), prefix=agent.name)
@@ -124,13 +120,6 @@ class Experiment:
         return True
 
 
-    def _initialize_callbacks(self, env: RISEnv2,):
-        comparisons = BaselinesComparison(env,
-                                          os.path.join(self.exhaustive_baseline_dirname, self.baselines_performance_files),
-                                          os.path.join(self.random_baseline_dirname, self.baselines_performance_files),
-                                          verbose=1)
-        history = HistoryCallback(env, save_observations=False)
-        return comparisons, history
 
 
     def _update_agent_params(self, agentParams):
@@ -154,37 +143,86 @@ class Experiment:
         return agent
 
 
-    def run(self, agent_or_agent_class, agent_params_class=None, agent_params_JSON_key=None):
 
-        env                  = RISEnv3(self.setup, self.observation_type, self.num_cached_realizations, self.data_dirname)
-        num_actions          = env.action_spec().maximum + 1
-        self.num_iterations  = int(self.num_iterations * num_actions)
+    def run_both_baselines(self, env):
+        if self.verbose:
+            print("\n\n=== Running Baselines ===\n")
+
+        self.run_baseline(env, RandomAgent)
+        self.run_baseline(env, OptimalAgent)
+
+
+    # def _initialize_callbacks(self, env: RISEnv2)->Tuple[List["TrainingCallback"],List["TrainingCallback"]]:
+    #     raise NotImplementedError
+    #
+    # def _apply_post_training_actions(self, agent, env, training_cbs, evaluation_cbs):
+    #     raise NotImplementedError
+
+    def run(self, agent_or_agent_class, agent_params_class=None, agent_params_JSON_key=None):
+        env = self.env_constructor(self.setup, self.observation_type, self.num_cached_realizations, self.data_dirname)
+        num_actions = env.action_spec().maximum + 1
+        self.num_iterations = int(self.num_iterations * num_actions)
 
         if not self._check_baselines_exist():
             self.run_both_baselines(env)
 
-        agent                = self._initialize_agent(env, agent_or_agent_class, agent_params_class, agent_params_JSON_key, num_actions)
-        comparisons, history = self._initialize_callbacks(env)
+        agent = self._initialize_agent(env, agent_or_agent_class, agent_params_class, agent_params_JSON_key, num_actions)
+        training_cbs, evaluation_cbs = self._initialize_callbacks(env)
 
-        agent.train(env, [history], [comparisons])
+        agent.train(env, training_cbs, evaluation_cbs)
 
-        agent_results_dirname = self._generate_agent_dirname(agent)
-
-        comparisons.save_scores_to_file(os.path.join(agent_results_dirname, "performance.csv"))
-        history.save_scores_to_file(os.path.join(agent_results_dirname, "training.csv"))
-
-        comparisons.plot(savefile=os.path.join(agent_results_dirname, "evaluation_performance.png"))
-        history.plot(savefile=os.path.join(agent_results_dirname,    "training_loss_and_reward.png"))
+        self._apply_post_training_actions(agent, env, training_cbs, evaluation_cbs)
 
         notifyme.send_notification("Agent finished")
 
         return agent, None
 
+    def _initialize_callbacks(self, env: RISEnv2):
+        raise NotImplementedError
+
+    def _apply_post_training_actions(self, agent, env, training_cbs, evaluation_cbs):
+
+        agent_results_dirname = self._generate_agent_dirname(agent)
+
+        comparisons = evaluation_cbs[0]
+        history = training_cbs[0]
+
+        comparisons.save_scores_to_file(os.path.join(agent_results_dirname, "performance.csv"))
+        history.save_scores_to_file(os.path.join(agent_results_dirname, "training.csv"))
+
+        comparisons.plot(savefile=os.path.join(agent_results_dirname, "evaluation_performance.png"))
+        history.plot(savefile=os.path.join(agent_results_dirname, "training_loss_and_reward.png"))
 
 
     def run_baseline(self, env, baseline_agent_class):
+        raise NotImplementedError
+
+
+
+class LinearMovementExperiment(Experiment):
+
+    def __init__(self, stream_or_filename):
+        super(LinearMovementExperiment, self).__init__(stream_or_filename)
+        self.baselines_performance_files += ".csv"
+
+    def _initialize_callbacks(self, env: RISEnv2):
+        comparisons = DynamicBaselinesComparison(env,
+                                                 os.path.join(self.exhaustive_baseline_dirname,
+                                                              self.baselines_performance_files),
+                                                 os.path.join(self.random_baseline_dirname,
+                                                              self.baselines_performance_files),
+                                                 verbose=1,
+                                                 fraction_lower=self.exp_params['fraction_lower_color'],
+                                                 fraction_upper=self.exp_params['fraction_upper_color'],
+                                                 converge_iters=self.exp_params['convergence_evaluations'],
+                                                 converge_wrt=self.exp_params['converge_wrt'],
+                                                 )
+        history = HistoryCallback(env, save_observations=False)
+        return [history], [comparisons]
+
+    def run_baseline(self, env, baseline_agent_class):
         if env is None:
-            env = RISEnv3(self.setup, self.observation_type, self.num_cached_realizations, self.data_dirname)
+            env = self.env_constructor(self.setup, self.observation_type, self.num_cached_realizations, self.data_dirname)
 
         num_actions    = env.action_spec().maximum + 1
         baseline_agent = self._initialize_agent(env, baseline_agent_class, AgentParams, "DUMMY_PARAMS", num_actions)
@@ -205,12 +243,52 @@ class Experiment:
 
 
 
-    def run_both_baselines(self, env):
-        if self.verbose:
-            print("\n\n=== Running Baselines ===\n")
 
-        self.run_baseline(env, RandomAgent)
-        self.run_baseline(env, OptimalAgent)
+class StaticRXsExperiment(Experiment):
+
+    def __init__(self, stream_or_filename):
+        super(StaticRXsExperiment, self).__init__(stream_or_filename)
+        self.baselines_performance_files += ".json"
+
+    def _initialize_callbacks(self, env: RISEnv2):
+        comparisons = StaticBaselinesComparison(env,
+                                                 os.path.join(self.exhaustive_baseline_dirname,
+                                                              self.baselines_performance_files),
+                                                 os.path.join(self.random_baseline_dirname,
+                                                              self.baselines_performance_files),
+                                                 verbose=1,
+                                                fraction_lower=self.exp_params['fraction_lower_color'],
+                                                fraction_upper=self.exp_params['fraction_upper_color'],
+                                                converge_iters=self.exp_params['convergence_evaluations'],
+                                                converge_wrt=self.exp_params['converge_wrt'],
+                                                )
+        history = HistoryCallback(env, save_observations=False)
+        return [history], [comparisons]
+
+    def run_baseline(self, env, baseline_agent_class):
+        if env is None:
+            env = self.env_constructor(self.setup, self.observation_type, self.num_cached_realizations, self.data_dirname)
+
+        num_actions    = env.action_spec().maximum + 1
+        baseline_agent = self._initialize_agent(env, baseline_agent_class, AgentParams, "DUMMY_PARAMS", num_actions)
+
+        if baseline_agent.name == 'OptimalAgent': dirname = 'Exhaustive'
+        elif baseline_agent.name == 'RandomAgent': dirname = 'Random'
+        else: raise ValueError
+
+        env.reset()
+        baseline_avg_score, _ = baseline_agent.evaluate(env, n_iters=self.num_eval_episodes, verbose=True)
+
+        baseline_scores_file = os.path.join(self.baselines_dirname, dirname, self.baselines_performance_files)
+        os.makedirs(os.path.join(self.baselines_dirname, dirname), exist_ok=True)
+
+        with open(baseline_scores_file, "w") as fout:
+            json.dump({"Mean Reward" : baseline_avg_score}, fout)
+
+        print(f"{dirname} baseline achieved an average reward of {baseline_avg_score:.3f}.")
+        print(f"Saved results to '{baseline_scores_file}'")
+
+
 
 
 
@@ -262,9 +340,6 @@ class EvaluationSaverCallback(TrainingCallback):
         df = pd.DataFrame(data=data_dict)
         df = df.set_index('Time Step', drop=True)
 
-        # if mode == 'append':
-        #     filename = self._increment_filename_counter(filename)
-
         df.to_csv(filename)
 
 
@@ -278,30 +353,59 @@ class EvaluationSaverCallback(TrainingCallback):
 
 
 
-
 class BaselinesComparison(TrainingCallback):
-    def __init__(self, env, optimal_base_filename: str, random_base_filename: str, verbose: int):
+    def __init__(self,
+                 env,
+                 optimal_base_filename    : str,
+                 random_base_filename     : str,
+                 verbose                  : int,
+                 fraction_lower           : float=None,
+                 fraction_upper           : float=None,
+                 converge_iters           : int=None,
+                 converge_wrt             : str=None,):
+
         super(BaselinesComparison, self).__init__("Baselines Comparison", env, verbose)
+
         self.time_steps = []
-        self.rewards    = []
+        self.rewards = []
 
-        self.average_optimal_evaluations = self._load_baseline_scores_from_file(optimal_base_filename)
-        self.average_random_evaluations  = self._load_baseline_scores_from_file(random_base_filename)
+        self.average_optimal_evaluations = self._load_baseline_scores_from_file(optimal_base_filename) # type: OrderedDict
+        self.average_random_evaluations  = self._load_baseline_scores_from_file(random_base_filename)  # type: OrderedDict
 
-        self.fraction_upper = None
-        self.fraction_lower = None
+        self.fraction_upper = fraction_lower
+        self.fraction_lower = fraction_upper
+
+        self.converge_iters     = converge_iters
+        self.converge_wrt       = converge_wrt
+        self._consecutive_iters = 0
 
         self.df = None
 
 
-    def _load_baseline_scores_from_file(self, filename):
-        try:
-            df = pd.read_csv(filename)
-            return OrderedDict(zip(df['Time Step'], df['Reward']))
-        except (KeyError, FileNotFoundError) as e:
-            raise EnvironmentError(f"Baseline file '{filename}' does not exist or corrupted.")
+    def _load_baseline_scores_from_file(self, filename)->OrderedDict:
+        raise NotImplementedError
+
+    def _get_baselines_scores_for_step(self, step)->Tuple[float,float]:
+        raise NotImplementedError
 
 
+    def _check_for_convergence(self, reward_frac_optimal, reward_frac_random):
+        if self.converge_iters is None or self.converge_wrt is None:
+            return False
+
+        if self.converge_wrt.lower() == 'exhaustive' and self.fraction_lower is not None:
+            if reward_frac_optimal >= self.fraction_lower:
+                self._consecutive_iters += 1
+            else:
+                self._consecutive_iters = 0
+
+        elif self.converge_wrt.lower() == 'random' and self.fraction_upper is not None:
+            if reward_frac_random >= self.fraction_upper:
+                self._consecutive_iters += 1
+            else:
+                self._consecutive_iters = 0
+
+        return self._consecutive_iters >= self.converge_iters
 
     def __call__(self, step=None, obs=None, action=None, reward=None, **kwargs):
         if reward is None: raise ValueError
@@ -311,47 +415,39 @@ class BaselinesComparison(TrainingCallback):
         self.time_steps.append(step)
         self.rewards.append(reward)
 
-
-        try:
-            r_max_mean = self.average_optimal_evaluations[step]
-            r_rand_mean = self.average_random_evaluations[step]
-        except KeyError:
-            raise ValueError(f"Step {step} does not exist in stored baseline dict(s)!")
+        r_max_mean, r_rand_mean = self._get_baselines_scores_for_step(step)
 
         reward_frac_optimal = reward / r_max_mean
         reward_frac_random = reward / r_rand_mean
 
-
+        converged = self._check_for_convergence(reward_frac_optimal, reward_frac_random)
 
         if self.verbose > 0:
 
-            if self.fraction_upper:
-                color = "green" if reward >= self.fraction_upper * r_max_mean else "red"
+            if self.fraction_lower:
+                color = "green" if reward >= self.fraction_lower * r_max_mean else "red"
                 reward_frac_optimal = colored(f"{reward_frac_optimal:.4f}", color)
             else:
                 reward_frac_optimal = f"{reward_frac_optimal:.4f}"
 
-            if self.fraction_lower:
-                color = "green" if reward >= self.fraction_lower * r_rand_mean else "red"
+            if self.fraction_upper:
+                color = "green" if reward >= self.fraction_upper * r_rand_mean else "red"
                 reward_frac_random = colored(f"{reward_frac_random:.4f}", color)
             else:
                 reward_frac_random = f"{reward_frac_random:.4f}"
 
             tqdm.write(
-                f"[{self.name}]: {step:04d} | Achieved reward: {reward:.4f} ( {reward_frac_random} of random, {reward_frac_optimal} of optimal ).")
+                f"Step {step:04d} | Achieved reward: {reward:.4f} ( {reward_frac_random} of random, {reward_frac_optimal} of optimal ).")
 
 
+        return converged
 
 
     def save_scores_to_file(self, filename, **kwargs):
-
-
         if len(self.average_optimal_evaluations.keys()) != len(self.time_steps) or len(self.average_random_evaluations.keys()) != len(self.time_steps):
             raise ValueError
 
         rewards = np.array(self.rewards)
-
-
 
         data_dict = {
             'Time Step'           : self.time_steps,
@@ -376,9 +472,8 @@ class BaselinesComparison(TrainingCallback):
 
         return df
 
+
     def plot(self, agent_name=None, savefile=None):
-
-
         if agent_name is None: agent_name = "method"
 
         fig = plt.figure(figsize=(16, 9))
@@ -422,6 +517,83 @@ class BaselinesComparison(TrainingCallback):
             plt.show(block=False)
         except Exception as e:
             print(f"Warning: Exception during showing figure! \n\n{e}\n")
+
+
+
+
+class StaticBaselinesComparison(BaselinesComparison):
+    def __init__(self, env, optimal_base_filename: str, random_base_filename: str, verbose: int, fraction_lower=None, fraction_upper=None, converge_iters=None, converge_wrt=None,):
+        self._exhaustive_baseline_score = None
+        self._random_baseline_score     = None
+        super(StaticBaselinesComparison, self).__init__(env, optimal_base_filename, random_base_filename, verbose, fraction_lower, fraction_upper, converge_iters, converge_wrt)
+
+
+    def _load_baseline_scores_from_file(self, filename):
+        try:
+            with open(filename) as fin:
+                performance = json.load(fin)
+
+                baseline_score = performance['Mean Reward']
+
+                if self._exhaustive_baseline_score is None:
+                    self._exhaustive_baseline_score = baseline_score
+                else:
+                    if self._exhaustive_baseline_score < baseline_score:
+                        self._random_baseline_score = self._exhaustive_baseline_score
+                        self._exhaustive_baseline_score = baseline_score
+                    else:
+                        self._random_baseline_score = baseline_score
+
+                return OrderedDict({})
+        except (TypeError, FileNotFoundError, OSError) as e:
+            raise EnvironmentError(f"Baseline file '{filename}' does not exist or corrupted.")
+
+
+    def _get_baselines_scores_for_step(self, step):
+        self.average_optimal_evaluations[step] = self._exhaustive_baseline_score
+        self.average_random_evaluations[step]  = self._random_baseline_score
+
+        r_max_mean = self.average_optimal_evaluations[step]
+        r_rand_mean = self.average_random_evaluations[step]
+
+        return r_max_mean, r_rand_mean
+
+
+
+
+class DynamicBaselinesComparison(BaselinesComparison):
+    def __init__(self, env, optimal_base_filename: str, random_base_filename: str, verbose: int, fraction_lower=None, fraction_upper=None, converge_iters=None, converge_wrt=None,):
+        super(DynamicBaselinesComparison, self).__init__(env, optimal_base_filename, random_base_filename, verbose, fraction_lower, fraction_upper, converge_iters, converge_wrt)
+
+
+    def _load_baseline_scores_from_file(self, filename):
+        try:
+            df = pd.read_csv(filename)
+            return OrderedDict(zip(df['Time Step'], df['Reward']))
+        except (KeyError, FileNotFoundError) as e:
+            raise EnvironmentError(f"Baseline file '{filename}' does not exist or corrupted.")
+
+
+
+    def _get_baselines_scores_for_step(self, step):
+        try:
+            r_max_mean = self.average_optimal_evaluations[step]
+            r_rand_mean = self.average_random_evaluations[step]
+
+            return r_max_mean, r_rand_mean
+        except KeyError:
+            raise ValueError(f"Step {step} does not exist in stored baseline dict(s)!")
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -569,3 +741,17 @@ def plot_rate_requests_penalties(training_info: List[Dict], env: RateRequestsEnv
     plt.ylabel('SINR per user')
     plt.legend()
     plt.show(block=False)
+
+
+
+
+################################################################
+def get_experiment_class_from_config(params_filename: str)->Experiment:
+    with open(params_filename) as fin:
+        params = json.load(fin)
+        fin.close()
+
+        if params['SETUP']['TYPE'].upper() == 'MOVEMENT':
+            return LinearMovementExperiment(params_filename)
+        else:
+            return StaticRXsExperiment(params_filename)

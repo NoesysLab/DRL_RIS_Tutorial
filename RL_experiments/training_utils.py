@@ -1,6 +1,8 @@
 import os
 from abc import ABC
 
+from utils.custom_types import VarsString
+from utils.misc import cond_print
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import tensorflow as tf
@@ -152,7 +154,7 @@ class Agent:
 
 
 
-    def evaluate(self, env: RISEnv2, return_info=False, n_iters=None):
+    def evaluate(self, env: RISEnv2, return_info=False, n_iters=None, verbose=False):
 
         n_iters = self.params.num_eval_episodes if n_iters is None else n_iters
 
@@ -163,8 +165,8 @@ class Agent:
         info = {'observation': [], 'action': [], 'reward': []}
 
 
-
-        for i in range(n_iters):
+        iter = range(n_iters) if not verbose else tqdm(range(n_iters))
+        for i in iter:
             if time_step.is_last():
                 time_step = env._reset()
 

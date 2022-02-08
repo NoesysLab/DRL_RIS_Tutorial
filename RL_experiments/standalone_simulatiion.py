@@ -95,16 +95,16 @@ class LinearMovement(Variation):
 
     def __init__(self, setup: Setup):
         super(LinearMovement, self).__init__("Moving_UEs", setup)
-        self.params                   = setup.movement_parameters
-        self.movement_angles          = degree2rad( np.array(self.params['movement_directions']) )                      # type: np.ndarray
-        self.movement_speeds          = self.setup.channel_coherence_time * np.array(self.params['movement_speeds'])    # type: np.ndarray
-        self.travel_distances         = np.array(self.params['travel_distances'])                                       # type: np.ndarray
+
+        self.movement_angles          = degree2rad( np.array(self.setup.movement_parameters['movement_directions']) )                      # type: np.ndarray
+        self.movement_speeds          = self.setup.channel_coherence_time * np.array(self.setup.movement_parameters['movement_speeds'])    # type: np.ndarray
+        self.travel_distances         = np.array(self.setup.movement_parameters['travel_distances'])                                       # type: np.ndarray
         self.UE_start_positions       = None                                                                            # type: np.ndarray
 
-        if self.params['starting_points'] is None:
+        if self.setup.movement_parameters['starting_points'] is None:
             self.UE_start_positions = self.setup.RX_positions.copy()
         else:
-            self.UE_start_positions = np.array(self.params['starting_points'])
+            self.UE_start_positions = np.array(self.setup.movement_parameters['starting_points'])
 
         assert len(self.movement_speeds) == len(self.movement_speeds) == self.UE_start_positions.shape[0] == len(self.travel_distances) == self.setup.K
 
@@ -178,8 +178,7 @@ class Setup:
     N_controllable             : int                                       # Total number of RIS element groups, calculated as N_tot / group_size. This can be thought of as the number of individually controlled elements.
     kappa_H                    : float                                     # BS-RIS Ricean factor (dB)
     kappa_G                    : float                                     # RIS-RX Ricean factor (dB)
-    _type_                     : str
-    rate_requests              : np.ndarray = None                         # Shape (K)
+    TYPE                       : str
     BS_position                : np.ndarray = dcArray([10, 5 , 2.0])
     RIS_positions              : np.ndarray = dcArray([[7.5, 13, 2.0], [12.5,  13,    2.0]])
     RX_box                     : np.ndarray = dcArray([ [7.5, 11.0, 1.5],  [12.5,  16.0, 2.0] ])
@@ -198,10 +197,10 @@ class Setup:
     d_BS_RIS                   : np.ndarray = field(init=False)            # Shape: (M,)
     d_RIS_RX                   : np.ndarray = field(init=False)            # Shape: (M, K)
     d_BS_RX                    : np.ndarray = field(init=False)            # Shape: (K)
-    variation_parameters       : dict       = None
+    variation                  : object     = field(init=False)
     channel_coherence_time     : float      = None
-    variation                  : Variation  = field(init=False)
     movement_parameters        : dict       = None
+    rate_requests              : np.ndarray = None                         # Shape (K)
 
 
 
@@ -241,23 +240,14 @@ class Setup:
         else:
             assert self.N_controllable == self.N_tot // self.group_size
 
-        #print(f'RXs are positioned at:\n{self.RX_positions}')
 
-        if self._type_.lower() == 'movement':
+        if self.TYPE.upper() not in {"RATES", "QOS", "MOVEMENT"}:
+            raise ValueError
+
+        if self.TYPE.upper() == "MOVEMENT":
             self.variation = LinearMovement(self)
-            self.variation.apply_initialization()
         else:
             self.variation = DummyVariation(self)
-            self.variation.apply_initialization()
-            self.variation_name = 'Dummy'
-
-            if self._type_.lower() == 'qos':
-                if self.rate_requests is None: raise ValueError
-
-
-
-
-
 
         self.rate_requests = np.array(self.rate_requests)
         if len(self.rate_requests) != 0 and len(self.rate_requests) != self.K:
