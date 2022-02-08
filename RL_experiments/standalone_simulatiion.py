@@ -1,10 +1,15 @@
+from __future__ import annotations
+
 import sys
+import abc
+from typing import Union
 
 import numpy as np
 from scipy.constants import pi, speed_of_light
 from dataclasses import dataclass, field
 import json
 import scipy
+from scipy import linalg
 
 from tqdm import tqdm
 
@@ -14,6 +19,144 @@ SPEED_OF_LIGHT_AIR = 299702547.0
 
 
 ################################# Configuration and Default Parameters #################################################
+
+class Variation(abc.ABC):
+
+    def __init__(self, name: str, setup: Setup):
+        self.setup  = setup                                       # type: Setup
+        self._name  = name                                        # type: str
+
+
+    def reset(self):
+        self.state = self.initial_state
+
+    @property
+    def name(self):
+        return self._name
+
+    @name.setter
+    def name(self, name:str):
+        self._name = name
+
+
+    @property
+    @abc.abstractmethod
+    def state(self):
+        pass
+
+    @state.setter
+    def state(self, state):
+        self.state = state
+
+    @property
+    @abc.abstractmethod
+    def initial_state(self):
+        pass
+
+    # @initial_state.setter
+    # def initial_state(self, state):
+    #     self.state = state
+
+    @abc.abstractmethod
+    def apply_initialization(self, *args, **kwargs):
+        pass
+
+    @abc.abstractmethod
+    def apply_before_realization(self, *args, **kwargs):
+        pass
+
+    def apply_ending(self,*args, **kwargs):
+        pass
+
+
+class DummyVariation(Variation):
+    @property
+    def state(self):
+        return None
+
+    @property
+    def initial_state(self):
+        return None
+
+    def apply_initialization(self, *args, **kwargs):
+        pass
+
+    def apply_before_realization(self, *args, **kwargs):
+        pass
+
+    def __init__(self, setup):
+        super(DummyVariation, self).__init__("Dummy", setup)
+
+
+
+
+class LinearMovement(Variation):
+
+
+    def __init__(self, setup: Setup):
+        super(LinearMovement, self).__init__("Moving_UEs", setup)
+
+        self.movement_angles          = degree2rad( np.array(self.setup.movement_parameters['movement_directions']) )                      # type: np.ndarray
+        self.movement_speeds          = self.setup.channel_coherence_time * np.array(self.setup.movement_parameters['movement_speeds'])    # type: np.ndarray
+        self.travel_distances         = np.array(self.setup.movement_parameters['travel_distances'])                                       # type: np.ndarray
+        self.UE_start_positions       = None                                                                            # type: np.ndarray
+
+        if self.setup.movement_parameters['starting_points'] is None:
+            self.UE_start_positions = self.setup.RX_positions.copy()
+        else:
+            self.UE_start_positions = np.array(self.setup.movement_parameters['starting_points'])
+
+        assert len(self.movement_speeds) == len(self.movement_speeds) == self.UE_start_positions.shape[0] == len(self.travel_distances) == self.setup.K
+
+
+    @staticmethod
+    def move_along_direction(position: np.ndarray, angle_rad: float, distance: float)->np.ndarray:
+        dx = np.cos(angle_rad)*distance
+        dy = np.sin(angle_rad)*distance
+
+        position[0] += dx
+        position[1] += dy
+
+        return position
+
+    @property
+    def state(self):
+        return self.setup.RX_positions
+
+    @property
+    def initial_state(self):
+        return self.UE_start_positions
+
+    def apply_initialization(self, *args, **kwargs):
+        self.apply_before_realization(args, kwargs)
+
+    def apply_before_realization(self, *args, **kwargs):
+
+        positions = self.setup.RX_positions
+        for k in range(self.setup.K):
+            new_position  = self.move_along_direction(positions[k,:], self.movement_angles[k], self.movement_speeds[k])
+            if np.linalg.norm(new_position - self.UE_start_positions[k,:]) > self.travel_distances[k]:
+                self.movement_angles[k] = (self.movement_angles[k] + np.pi ) % (2*np.pi)
+                new_position = self.move_along_direction(positions[k, :], self.movement_angles[k], self.movement_speeds[k])
+            positions[k,:] = new_position
+
+        self.setup.RX_positions = positions
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 @dataclass()
 class Setup:
@@ -35,6 +178,7 @@ class Setup:
     N_controllable             : int                                       # Total number of RIS element groups, calculated as N_tot / group_size. This can be thought of as the number of individually controlled elements.
     kappa_H                    : float                                     # BS-RIS Ricean factor (dB)
     kappa_G                    : float                                     # RIS-RX Ricean factor (dB)
+    TYPE                       : str
     BS_position                : np.ndarray = dcArray([10, 5 , 2.0])
     RIS_positions              : np.ndarray = dcArray([[7.5, 13, 2.0], [12.5,  13,    2.0]])
     RX_box                     : np.ndarray = dcArray([ [7.5, 11.0, 1.5],  [12.5,  16.0, 2.0] ])
@@ -53,6 +197,13 @@ class Setup:
     d_BS_RIS                   : np.ndarray = field(init=False)            # Shape: (M,)
     d_RIS_RX                   : np.ndarray = field(init=False)            # Shape: (M, K)
     d_BS_RX                    : np.ndarray = field(init=False)            # Shape: (K)
+    variation                  : object     = field(init=False)
+    channel_coherence_time     : float      = None
+    movement_parameters        : dict       = None
+    rate_requests              : np.ndarray = None                         # Shape (K)
+
+
+
 
 
 
@@ -89,7 +240,18 @@ class Setup:
         else:
             assert self.N_controllable == self.N_tot // self.group_size
 
-        #print(f'RXs are positioned at:\n{self.RX_positions}')
+
+        if self.TYPE.upper() not in {"RATES", "QOS", "MOVEMENT"}:
+            raise ValueError
+
+        if self.TYPE.upper() == "MOVEMENT":
+            self.variation = LinearMovement(self)
+        else:
+            self.variation = DummyVariation(self)
+
+        self.rate_requests = np.array(self.rate_requests)
+        if len(self.rate_requests) != 0 and len(self.rate_requests) != self.K:
+            raise ValueError("Rate requests do not correspond with the number of RXs")
 
 
     @staticmethod
@@ -113,6 +275,9 @@ class Setup:
 
 ################################## Helper Functions ####################################################################
 
+
+def degree2rad(val_degrees):
+    return val_degrees * np.pi/180.
 
 def dBm_to_Watt(val_dBm):
     return np.power(10, (val_dBm/10 - 3)  )
@@ -254,6 +419,8 @@ def calculate_h(setup : Setup, dist_TX_RX):
 
 def simulate_transmission(setup):
 
+    setup.variation.apply_before_realization()
+
     H = np.empty(shape=(setup.M, setup.B, setup.N), dtype=complex)
     G = np.empty(shape=(setup.M, setup.K, setup.N), dtype=complex)
     h = np.empty(shape=(setup.K, setup.B), dtype=complex)
@@ -381,6 +548,23 @@ def initialize_precoding_codebook(setup):
 
 
 
+
+def get_BS_UEs_AoDs(setup: Setup)->np.ndarray:
+    BS_pos       = setup.BS_position
+    UE_positions = setup.RX_positions
+
+    AoDs = np.zeros(shape=(setup.K,2) )  # [ [AoD_el_1, AoD_az_1], ..., [AoD_el_K, AoD_az_K]]
+
+    for i, UE_pos in enumerate(UE_positions):
+        angle_el, angle_az = ray_to_elevation_azimuth(BS_pos, UE_pos)
+        AoDs[i, 0] = angle_el
+        AoDs[i, 1] = angle_az
+
+    return AoDs
+
+
+
+
 def example_main():
     setup        = Setup.load_from_json("./parameters.json")                                     # Load setup parameters from configuration file
 
@@ -399,8 +583,49 @@ def example_main():
     print(f"Average sum rate: {avg_sum_rate}")
 
 
+
+def plot_moving_UEs():
+    setup = Setup.load_from_json("./parameters.json")  # Load setup parameters from configuration file
+
+    avg_sum_rate = 0.0
+    RUNS = 5000
+
+    UE_positions = np.empty((RUNS, setup.K, 3))
+
+    for run in tqdm(range(RUNS)):
+        UE_positions[run,:,:] = setup.variation.state
+
+        thetas        = np.random.choice(setup.RIS_phases,size=(setup.M, setup.N))
+        RIS_profiles  = RIS_state2profile(thetas)
+        H, G, h       = simulate_transmission(setup)
+        W             = setup.codebook[0, :, :]
+        SINRs         = compute_SINR_per_user(setup, H, G, h, RIS_profiles, W)
+        sum_rate      = compute_sum_rate(SINRs)
+        avg_sum_rate += sum_rate
+
+    avg_sum_rate /= RUNS
+    print(f"Average sum rate: {avg_sum_rate}")
+
+
+    import matplotlib.pyplot as plt
+    fig, ax = plt.subplots(figsize=(16,9))
+
+    for k in range(setup.K):
+        UE_x = UE_positions[:, k, 0]
+        UE_y = UE_positions[:, k, 1]
+        line, = ax.plot(UE_x, UE_y)
+        ax.scatter(UE_x, UE_y, color=line.get_color())
+
+    plt.scatter([setup.BS_position[0]], [setup.BS_position[1]], color='k', marker='D', s=100)
+    plt.scatter(setup.RIS_positions[:,0], setup.RIS_positions[:,1], color='k', marker='|', s=10000)
+    plt.grid()
+    plt.show()
+
+
+
 if __name__ == '__main__':
-    example_main()
+    plot_moving_UEs()
+    #example_main()
 
 
 
