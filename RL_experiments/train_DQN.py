@@ -10,7 +10,8 @@ from typing import Tuple, Callable, Union
 from dataclasses import dataclass
 from typing import Tuple, Callable
 
-import tensorflow as tf
+import numpy as np
+
 import tf_agents
 from tf_agents.agents.dqn import dqn_agent
 from tf_agents.environments import tf_py_environment
@@ -22,7 +23,6 @@ from tf_agents.trajectories import trajectory
 from tf_agents.utils.common import element_wise_squared_loss, element_wise_huber_loss
 from tqdm import tqdm
 
-from RL_experiments.OLD_VERSION.training import compute_avg_return
 from RL_experiments.environments import RISEnv2
 from RL_experiments.training_utils import AgentParams, Agent, tqdm_, apply_callbacks
 
@@ -62,8 +62,8 @@ def map_name2loss(loss_function_name: str)->Callable:
 
 
 class DQNAgent(Agent):
-    def __init__(self, params: DQNParams, num_actions: int, observation_dim: int):
-        super().__init__("DQN", params, num_actions, observation_dim)
+    def __init__(self, params: DQNParams, num_actions: int, observation_dim: int, observation_type: str):
+        super().__init__("DQN", params, num_actions, observation_dim, observation_type)
 
         self.batch_size            = self.params.batch_size
         #self.params.num_iterations = int(self.params.num_iterations * num_actions)
@@ -81,29 +81,9 @@ class DQNAgent(Agent):
         return self._tf_agent.collect_policy
 
     def _construct_Q_network(self, num_actions, fc_layer_params):
-        # def dense_layer(num_units):
-        #       return tf.keras.layers.Dense(
-        #           num_units,
-        #           activation           = tf.keras.activations.relu,
-        #           #kernel_regularizer   = tf.keras.regularizers.l1(10e-3),
-        #           #activity_regularizer = tf.keras.regularizers.l2(.2),
-        #           kernel_initializer   = tf.keras.initializers.VarianceScaling(scale=5.0, mode='fan_in',
-        #                                                                        distribution='truncated_normal'),
-        #       )
-        #
-        #
-        # dense_layers = [dense_layer(num_units) for num_units in fc_layer_params]
-        # q_values_layer = tf.keras.layers.Dense(
-        #     num_actions,
-        #     activation         = None,
-        #     kernel_initializer = tf.keras.initializers.RandomUniform(minval=-0.03, maxval=0.03),
-        #     bias_initializer   = tf.keras.initializers.Constant(-0.2),
-        #     )
-        #
-        # return sequential.Sequential(dense_layers + [q_values_layer])
 
-        q_net_layers = [
-            # tf.keras.layers.Input((observation_dim,)),
+        NN_feature_extraction_layers_CHANNELS = [
+            #tf.keras.layers.Input((observation_dim,)),
             tf.keras.layers.Reshape((-1, 1, 1)),
             tf.keras.layers.Conv2D(64, (5, 1), data_format="channels_last"),
             tf.keras.layers.Dropout(self.params.dropout_p),
@@ -112,6 +92,15 @@ class DQNAgent(Agent):
             tf.keras.layers.Dropout(self.params.dropout_p),
             tf.keras.layers.MaxPool2D((4, 1)),
             tf.keras.layers.Flatten(),
+        ]
+
+        NN_feature_extraction_layers_ANGLES = [
+            #tf.keras.layers.Input((observation_dim,)),
+            tf.keras.layers.Dense(32, activation='relu'),
+            tf.keras.layers.Dropout(self.params.dropout_p),
+        ]
+
+        q_net_layers = [
             tf.keras.layers.Dense(32, activation='relu'),
             tf.keras.layers.Dropout(self.params.dropout_p),
             tf.keras.layers.Dense(32, activation='relu'),
@@ -119,7 +108,12 @@ class DQNAgent(Agent):
             tf.keras.layers.Dense(num_actions, activation='linear')
         ]
 
-        return sequential.Sequential(q_net_layers)
+        if self.observation_type == 'channels':
+            return sequential.Sequential( NN_feature_extraction_layers_CHANNELS + q_net_layers )
+        elif self.observation_type == 'angles':
+            return sequential.Sequential( NN_feature_extraction_layers_ANGLES + q_net_layers )
+        else:
+            raise ValueError(f"{self.name} agent only supports `channels' and 'angles' observation types.")
 
     def initialize_DQN_agent(self, train_env: TFPyEnvironment):
         num_actions = int(train_env.action_spec().maximum) - int(train_env.action_spec().minimum) + 1
@@ -207,10 +201,9 @@ class DQNAgent(Agent):
         reward_steps = []
         losses       = []
 
-        initial_reward, _ = self.evaluate(train_env)
-
-        rewards.append(initial_reward)
-        reward_steps.append(0)
+        # initial_reward, _ = self.evaluate(train_env)
+        # rewards.append(initial_reward)
+        # reward_steps.append(0)
 
 
 
@@ -224,7 +217,7 @@ class DQNAgent(Agent):
 
                 experience, _ = next(iterator)
                 train_loss    = self._tf_agent.train(experience).loss
-                step          = self._tf_agent.train_step_counter.numpy()
+                step          = self._tf_agent.train_step_counter.numpy()-1
 
                 losses.append(train_loss)
 
@@ -243,8 +236,7 @@ class DQNAgent(Agent):
                         tqdm.write(f"Step={step} | Algorithm converged due to criteria: {converged_callback_names}")
                         break
 
-                converged_flag, converged_callback_names = apply_callbacks(training_callbacks, step, obs, action,
-                                                                           reward)
+                converged_flag, converged_callback_names = apply_callbacks(training_callbacks, step, obs, action, reward, loss=train_loss)
                 if converged_flag:
                     tqdm.write(f"Step={step} | Algorithm converged due to criteria: {converged_callback_names}")
                     break
@@ -257,14 +249,47 @@ class DQNAgent(Agent):
 
 
 
-    def evaluate(self, env: Union[RISEnv2, TFPyEnvironment], return_info=False):
+    def evaluate(self, env: Union[RISEnv2, TFPyEnvironment], return_info=False, n_iters=None, verbose=False):
+        n_iters = self.params.num_eval_episodes if n_iters is None else n_iters
+
         if not isinstance(env, TFPyEnvironment):
             env = tf_py_environment.TFPyEnvironment(env)
-        avg_score, std_return = compute_avg_return(env, self.policy, self.params.num_eval_episodes)
-        if not return_info:
+
+        avg_score, std_return = self.compute_avg_return(env, self.policy, n_iters)
+        if return_info is False:
             return avg_score, std_return
         else:
             return avg_score, std_return, None
+
+
+
+    @staticmethod
+    def compute_avg_return(environment, policy, num_timesteps=100, verbose=False):
+        """
+        :param environment: A  TfPyEnvironment instance
+        :param policy: A TFPolicy in
+        :param num_timesteps:
+        :return: float
+        """
+        returns = []
+        #time_step = environment.reset()
+        time_step  = environment.current_time_step()
+
+        iter = range(num_timesteps) if not verbose else tqdm(range(num_timesteps))
+        for ts_counter in iter:
+            if  time_step.is_last():
+                time_step = environment.reset()
+
+            action_step = policy.action(time_step)
+            time_step = environment.step(action_step.action)
+            returns.append( float(time_step.reward.numpy()) )
+
+
+        returns = np.array(returns)
+        avg_return = float(np.mean(returns))
+        std_return = float(np.std(returns))
+
+        return avg_return, std_return
 
 
 

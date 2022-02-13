@@ -49,24 +49,42 @@ class NeuralSoftmaxParams(AgentParams):
 
 class NeuralSoftmaxAgent(Agent):
 
-    def __init__(self, params: NeuralSoftmaxParams, num_actions: int, observation_dim: int):
+    NN_feature_extraction_layers_CHANNELS = lambda self, observation_dim: [
+        tf.keras.layers.Input((observation_dim,)),
+        tf.keras.layers.Reshape((-1, 1, 1)),
+        tf.keras.layers.Conv2D(64, (5, 1), data_format="channels_last"),
+        tf.keras.layers.Dropout(self.params.dropout_p),
+        tf.keras.layers.MaxPool2D((4, 1)),
+        tf.keras.layers.Conv2D(64, (5, 1), data_format="channels_last"),
+        tf.keras.layers.Dropout(self.params.dropout_p),
+        tf.keras.layers.MaxPool2D((4, 1)),
+        tf.keras.layers.Flatten(),
+    ]
 
-        super().__init__("Neural Softmax", params, num_actions, observation_dim)
+    NN_feature_extraction_layers_ANGLES = lambda self, observation_dim: [
+        tf.keras.layers.Input((observation_dim,)),
+        tf.keras.layers.Dense(32, activation='relu'),
+        tf.keras.layers.Dropout(self.params.dropout_p),
+    ]
+
+
+    def __init__(self, params: NeuralSoftmaxParams, num_actions: int, observation_dim: int, observation_type: str):
+
+        super().__init__("Neural Softmax", params, num_actions, observation_dim, observation_type)
         self.batch_size = self.params.batch_size
         #self.params.num_iterations = int(self.params.num_iterations * num_actions)
 
         assert self.params.tau_change == 'constant'
 
-        self.rewardNet = tf.keras.Sequential([
-            tf.keras.layers.Input((observation_dim,)),
-            tf.keras.layers.Reshape((-1, 1, 1)),
-            tf.keras.layers.Conv2D(64, (5, 1), data_format="channels_last"),
-            tf.keras.layers.Dropout(self.params.dropout_p),
-            tf.keras.layers.MaxPool2D((4, 1)),
-            tf.keras.layers.Conv2D(64, (5, 1), data_format="channels_last"),
-            tf.keras.layers.Dropout(self.params.dropout_p),
-            tf.keras.layers.MaxPool2D((4, 1)),
-            tf.keras.layers.Flatten(),
+        if observation_type == 'channels':
+            feature_extraction_layers = self.NN_feature_extraction_layers_CHANNELS(observation_dim,)
+        elif observation_type == 'angles':
+            feature_extraction_layers = self.NN_feature_extraction_layers_ANGLES(observation_dim,)
+        else:
+            raise ValueError(f"{self.name} agent only supports `channels' and 'angles' observation types.")
+
+        self.rewardNet = tf.keras.Sequential(
+            feature_extraction_layers +[
             tf.keras.layers.Dense(32, activation='relu'),
             tf.keras.layers.Dropout(self.params.dropout_p),
             tf.keras.layers.Dense(32, activation='relu'),
@@ -123,7 +141,7 @@ class NeuralSoftmaxAgent(Agent):
         return self._epsilon_greedy_selection
     
     
-    def _initialize_training_vars(self):
+    def _initialize_training_vars(self, env: RISEnv2):
         self.batch_X   = np.empty((self.batch_size, self.observation_dim))
         self.batch_y   = np.empty((self.batch_size, 2))
         self.batch_i   = 0
