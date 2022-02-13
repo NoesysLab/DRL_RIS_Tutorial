@@ -22,8 +22,7 @@ from tqdm import tqdm
 
 from RL_experiments.environments import RISEnv2
 from RL_experiments.standalone_simulatiion import Setup
-from RL_experiments.experiments import Experiment
-
+from RL_experiments.experiments import Experiment, get_experiment_class_from_config
 
 
 @dataclass
@@ -178,7 +177,7 @@ if __name__ == '__main__':
     params_filename = sys.argv[1]
 
 
-    exp = Experiment(params_filename)
+    exp = get_experiment_class_from_config(params_filename)
     exp.run(NeuralSoftmaxAgent,
             NeuralSoftmaxParams,
             "NEURAL_SOFTMAX_PARAMS",)

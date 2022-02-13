@@ -56,7 +56,7 @@
     "num_cached_realizations"     : 210000,
     "baselines_performance_files" : "evaluation_performance",
 
-    "fraction_upper_color"        : 0.8,
+    "fraction_upper_color"        : 1.5,
     "fraction_lower_color"        : 1.5,
 
     "converge_wrt"                : "exhaustive",
