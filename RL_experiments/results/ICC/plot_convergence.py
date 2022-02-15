@@ -108,7 +108,7 @@ line_styles = ['-','--', ':', '-.', '.']
 marker_styles = ["o", "s", 'x', 'D']
 hatches = ['/', '-', '\\', '|', '+', 'x', 'o', 'O', '.', '*']
 
-W = 300
+W = 500
 
 FIRST_N = 15000
 df = df[df['iteration']<=FIRST_N]
@@ -131,15 +131,15 @@ fig, ax = plt.subplots()
 ax.plot(x, Bandit_rewards_smoothed, color=colors[0], label=r'${\rm DRP}$')
 ax.plot(x, DQN_rewards_smoothed, color=colors[1], label=r'${\rm DQN}$')
 
-ax.fill_between(x, Bandit_rewards_smoothed-Bandit_rewards_std, Bandit_rewards_smoothed+Bandit_rewards_std, color=colors[0], alpha=0.5)
-ax.fill_between(x, DQN_rewards_smoothed-Bandit_rewards_std, DQN_rewards_smoothed+Bandit_rewards_std, color=colors[1], alpha=0.5)
+#ax.fill_between(x, Bandit_rewards_smoothed-Bandit_rewards_std, Bandit_rewards_smoothed+Bandit_rewards_std, color=colors[0], alpha=0.15)
+#ax.fill_between(x, DQN_rewards_smoothed-Bandit_rewards_std, DQN_rewards_smoothed+Bandit_rewards_std, color=colors[1], alpha=0.15)
 
 plt.legend(loc='lower right')
 plt.grid()
 ax.set_xlabel(r'${\rm Iteration}$')
 ax.set_ylabel(r"${\rm Sum\mbox{-}Rate~~(bps/Hz)}$")
 ax.set_xlim([1,FIRST_N ])
-plt.savefig("./plots/convergence-rate.pdf")
+plt.savefig("./plots/convergence-rate-no-stds.pdf")
 plt.show()
 
 
