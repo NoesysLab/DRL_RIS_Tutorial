@@ -1,12 +1,12 @@
 #!/bin/bash
 
-echo "Note: conda version must be4.6+ for this to work."
+echo "Note: conda version must be 4.6+ for this to work."
 echo "Conda version: $(conda --version)"
 
 eval "$(conda shell.bash hook)"
-conda activate tfagents
+conda activate tf2
 
-export PYTHONPATH=/home/kyriakos/workspace/reasearch/RIS/ris-codebase:$PYTHONPATH
+export PYTHONPATH=/home/noesyslab/remote_project_mirrors/KyrLinuxLaptop/RIS_simulation:$PYTHONPATH
 
 
 for f in Power_*.json; do
