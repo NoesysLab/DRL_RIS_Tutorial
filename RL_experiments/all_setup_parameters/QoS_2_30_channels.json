@@ -53,7 +53,7 @@
     "baselines_dir_vars"          : "n_iters,n_evals",
     "agent_dir_vars"              : "observation_type:,n_iters,n_evals",
 
-    "num_cached_realizations"     : 210000,
+    "num_cached_realizations"     : 25000,
     "baselines_performance_files" : "evaluation_performance",
 
     "fraction_upper_color"        : 1.5,

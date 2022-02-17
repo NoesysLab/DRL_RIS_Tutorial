@@ -163,7 +163,7 @@ class Experiment:
         num_actions = env.action_spec().maximum + 1
         self.num_iterations = int(self.num_iterations * num_actions)
 
-        if not self._check_baselines_exist():
+        if not self.exp_params['use_cached_baselines'] or not self._check_baselines_exist():
             self.run_both_baselines(env)
 
         agent = self._initialize_agent(env, agent_or_agent_class, agent_params_class, agent_params_JSON_key, num_actions)

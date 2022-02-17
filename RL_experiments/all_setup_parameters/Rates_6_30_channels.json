@@ -47,7 +47,7 @@
     "data_dirname"                : "Simulation_data",
     "baselines_rootdir"           : "Baselines",
     "agents_rootdir"              : "Agents",
-    "use_cached_baselines"        : false,
+    "use_cached_baselines"        : true,
 
     "experiment_dir_vars"         : "N_controllable:N_contr,kappa_H",
     "baselines_dir_vars"          : "n_iters,n_evals",

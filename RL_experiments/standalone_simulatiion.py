@@ -318,7 +318,9 @@ def split_to_close_to_square_factors(x: int):
         if x % n1 == 0: break
         n1 -= 1
     n2 = x // n1
-    return n1, n2
+    return max(n1, n2), min(n1, n2)
+    #return min(n1, n2), max(n1, n2)
+
 
 def ray_to_elevation_azimuth(starting_point, ending_point):
     def cart2sph(x, y, z):

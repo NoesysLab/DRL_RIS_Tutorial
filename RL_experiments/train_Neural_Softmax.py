@@ -121,12 +121,12 @@ class NeuralSoftmaxAgent(Agent):
         else:
             return self._argmax_action_selection(obs)
 
-    # def _Boltzmann_distribution_selection(self, obs):
-    #     obs       = obs.reshape(1, -1)
-    #     rewards   = self.rewardNet.predict(obs)[0, :]
-    #     exponents = np.exp(rewards/self.params.Boltzmann_tau)
-    #     probs     = exponents / np.sum(exponents)
-    #     return np.random.choice(self.num_actions, p=probs)
+    def _Boltzmann_distribution_selection(self, obs):
+        obs       = obs.reshape(1, -1)
+        rewards   = self.rewardNet.predict(obs)[0, :]
+        exponents = np.exp(rewards/self.params.Boltzmann_tau)
+        probs     = exponents / np.sum(exponents)
+        return np.random.choice(self.num_actions, p=probs)
 
 
 

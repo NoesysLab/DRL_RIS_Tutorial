@@ -3,9 +3,9 @@
     "K"                         : 2,
     "B"                         : 4,
     "M"                         : 2,
-    "N"                         : 32,
+    "N"                         : 16,
     "group_size"                : 16,
-    "N_controllable"            : 4,
+    "N_controllable"            : 2,
     "kappa_H"                   : 30,
     "kappa_G"                   : 30,
     "frequency"                 : 5000000000.0,
@@ -27,7 +27,7 @@
 
     "rate_requests"             : [0.4, 0.4],
 
-    "TYPE"                      : "QoS"
+    "TYPE"                      : "Rates"
   },
 
 
@@ -43,7 +43,7 @@
     "plot_smooth_sigma"           : true,
     "observation_type"            : "channels",
 
-    "results_rootdir"             : "./results/QoS/",
+    "results_rootdir"             : "./results/Test-Planar-RIS-max-min/",
     "data_dirname"                : "Simulation_data",
     "baselines_rootdir"           : "Baselines",
     "agents_rootdir"              : "Agents",
@@ -53,10 +53,10 @@
     "baselines_dir_vars"          : "n_iters,n_evals",
     "agent_dir_vars"              : "observation_type:,n_iters,n_evals",
 
-    "num_cached_realizations"     : 210000,
+    "num_cached_realizations"     : 30000,
     "baselines_performance_files" : "evaluation_performance",
 
-    "fraction_upper_color"        : 0.8,
+    "fraction_upper_color"        : 1.5,
     "fraction_lower_color"        : 1.5,
 
     "converge_wrt"                : "exhaustive",
