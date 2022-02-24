@@ -111,7 +111,7 @@ def plot2():
         CurveData(NSM_rates/Exhaustive_rates, colors[0], '-', r'{\rm Neural}$ \ \epsilon${\rm -greedy}',           '/'),
         CurveData(DQN_rates/Exhaustive_rates,    colors[1], ':', r'{\rm DQN}',          '\\'),
         CurveData(UCB_rates/Exhaustive_rates,    colors[2], '-.', r'{\rm UCB}',           '-'),
-        CurveData(Random_rates/Exhaustive_rates, 'grey',       '--', r'{\rm Random Policy}'        ,None),
+        CurveData(Random_rates/Exhaustive_rates, 'grey',       '--', r'{\rm Random}'        ,None),
 #        CurveData(Exhaustive_rates, 'k',   '--', 'Optimal'       ,'.')
     ]
 

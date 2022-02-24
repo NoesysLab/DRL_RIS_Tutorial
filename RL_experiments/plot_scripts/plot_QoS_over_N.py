@@ -106,11 +106,11 @@ def plot1():
     hatches = ['/', '-', '\\', '|', '+', 'x', 'o', 'O', '.', '*']
 
     all_curve_data = [
-        CurveData(NSM_rates, colors[0], '-', 'DRP',           'o'),
-        CurveData(DQN_rates,    colors[1], ':', 'DQN',          'x'),
-        CurveData(UCB_rates,    colors[2], '-.', 'UCB',           'D'),
-        CurveData(Random_rates, 'k',       '--', 'Random'        ,'*'),
-        CurveData(Exhaustive_rates, 'grey',   '--', 'Optimal'       ,'.')
+        CurveData(NSM_rates, colors[0], '-', r'{\rm Neural} \  \epsilon{\rm -greedy}',           'o'),
+        CurveData(DQN_rates,    colors[1], ':', r'{\rm DQN}',          'x'),
+        CurveData(UCB_rates,    colors[2], '-.', r'{\rm UCB}',           'D'),
+        CurveData(Random_rates, 'grey',       '--', r'{\rm Random}'        ,'*'),
+        CurveData(Exhaustive_rates, 'k',   '--', r'{\rm Optimal}'       ,'.')
     ]
 
     for cd in all_curve_data:
@@ -119,7 +119,7 @@ def plot1():
 
 
 
-    ax.set_ylabel(r"${\rm Sum\mbox{-}Rate~~(bps/Hz)}$")
+    ax.set_ylabel(r"${\rm Mean} \ {\rm Reward}$")
 
 
 

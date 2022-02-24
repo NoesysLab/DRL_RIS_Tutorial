@@ -33,7 +33,7 @@
 
   "EXPERIMENT" : {
     "n_iters"                     : 50,
-    "n_evals"                     : 15,
+    "n_evals"                     : 1,
     "num_eval_episodes"           : 300,
     "eval_interval"               : null,
     "verbose"                     : true,
