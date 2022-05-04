@@ -106,7 +106,7 @@ def plot1():
     hatches = ['/', '-', '\\', '|', '+', 'x', 'o', 'O', '.', '*']
 
     all_curve_data = [
-        CurveData(NSM_rates, colors[0], '-', 'DRP',           'o'),
+        CurveData(NSM_rates, colors[0], '-', r'Neural~}\epsilon{\rm -greedy',           'o'),
         CurveData(DQN_rates,    colors[1], ':', 'DQN',          'x'),
         CurveData(UCB_rates,    colors[2], '-.', 'UCB',           'D'),
         CurveData(Random_rates, 'k',       '--', 'Random'        ,'*'),
@@ -119,13 +119,13 @@ def plot1():
 
 
 
-    ax.set_ylabel(r"${\rm Sum\mbox{-}Rate~~(bps/Hz)}$")
+    ax.set_ylabel(r"${\rm Sum~rate~(bps/Hz)}$")
 
 
 
 
     plt.rcParams["xtick.minor.visible"] = False
-    ax.set_xlabel(r"${\rm Transmit~Power~}(P){\rm ~in~ (dBm)}$")
+    ax.set_xlabel(r"${\rm Transmit~power~}(P){\rm ~in~ dBm}$")
     #ax.set_xticklabels([None, '$10$', '$10$', '$30$', '$40$', '$50$', None, None])
 
 
@@ -158,7 +158,7 @@ def plot1():
     ax.indicate_inset_zoom(axins, edgecolor="black")
 
     ax.legend(loc='lower right', ncol=3)
-    ax.set_ylim([-1.2, 5])
+    ax.set_ylim([-0.999, 5])
 
     plt.savefig('./plots/sum-rate-varying-P-plot-inset.pdf')
     plt.savefig('./plots/sum-rate-varying-P-plot-inset.png')
@@ -166,6 +166,118 @@ def plot1():
     plt.show()
 
 
+
+
+def plot2():
+    sns.set_style('ticks')
+    from matplotlib import rc
+    rc('text', usetex=True)
+    fontsize = 16
+    plt.rcParams["axes.edgecolor"] = "black"
+    plt.rcParams["axes.linewidth"] = 1
+    plt.rcParams["xtick.labelsize"] = fontsize - 1
+    plt.rcParams["ytick.labelsize"] = fontsize - 1
+    plt.rcParams["savefig.dpi"] = 400
+    plt.rcParams["savefig.bbox"] = "tight"
+    plt.rcParams["savefig.pad_inches"] = 0.0
+    plt.rcParams["savefig.transparent"] = True
+    plt.rcParams["axes.labelsize"] = fontsize - 1
+    plt.rcParams['text.latex.preamble'] = r'\usepackage{amsfonts}\usepackage{amsmath}'
+    # plt.rcParams['font.size'] = fontsize
+    plt.rcParams['legend.fontsize'] = fontsize - 5
+
+    fig, ax = plt.subplots()
+
+    x = P_vals
+
+    CurveData = namedtuple('CurveData', ['rates',
+                                         'color',
+                                         'line_style',
+                                         'label',
+                                         'hatch'])
+
+    colors = sns.color_palette("Set1")
+    line_styles = ['-', '--', ':', '-.', '.']
+    marker_styles = ["o", "s", 'x', 'D']
+    hatches = ['/', '-', '\\', '|', '+', 'x', 'o', 'O', '.', '*']
+
+    all_curve_data = [
+        CurveData(NSM_rates / Exhaustive_rates, colors[0], '-', r'{\rm Neural}$ \ \epsilon${\rm -greedy}', '/'),
+        CurveData(DQN_rates / Exhaustive_rates, colors[1], ':', r'{\rm DQN}', '\\'),
+        CurveData(UCB_rates / Exhaustive_rates, colors[2], '-.', r'{\rm UCB}', '-'),
+        CurveData(Random_rates / Exhaustive_rates, 'grey', '--', r'{\rm Random}', None),
+        #        CurveData(Exhaustive_rates, 'k',   '--', 'Optimal'       ,'.')
+    ]
+
+    ax.set_ylabel(r"${\rm Sum\mbox{-}Rate~~(bps/Hz)}$")
+
+    x = np.arange(len(P_vals))  # the label locations
+    width = 0.8  # the width of the bars
+
+    fig, ax = plt.subplots()
+
+    rects = []
+
+    for cd, offset in zip(all_curve_data, [-width / 2, -width / 4, 0, width / 4]):
+        rects_i = ax.bar(x + offset, cd.rates, width / 4,
+                         label=cd.label,
+                         color=cd.color,
+                         hatch=cd.hatch,
+                         align='edge',
+                         )
+
+        rects.append(rects_i)
+
+    # x_lim_min = 0 - width - width / 4
+    # x_lim_max = x[-1] + width / 2 + width / 4
+
+    # ax.hlines(random_norm_rewards.mean(), x_lim_min, x_lim_max,
+    #           colors=[(0, 0, 0)], linestyles='dashed', label=r'{\rm Random policy}')
+
+    ax.set_ylabel(r'{\rm Normalized sum rate}')
+    # ax.set_xticks(np.arange(len(all_curve_data) - 2))
+    # x.set_xticklabels([cd.label for cd in list(all_curve_data.values())[:-2]])
+
+    # ax.set_xlim([x_lim_min, x_lim_max])
+
+    # handles, labels = plt.gca().get_legend_handles_labels()
+    # order = [1, 2, 3, 0]
+    # ax.legend([handles[idx] for idx in order], [labels[idx] for idx in order], title=r'{\rm Observation Type}',
+    #           loc='lower right')
+
+    # plt.rcParams["xtick.minor.visible"] = False
+    # ax.set_xlabel(r"${\rm Total~RIS~unit\mbox{-}elements}~(N_{{\rm tot}})$")
+    # ax.set_xticklabels([None, '$32$', '$64$', '$96$', '$128$', '$160$', None, ])
+    #
+    # ax2 = ax.twiny()
+    # ax2.set_xticks(ax.get_xticks())
+    # ax2.set_xbound(ax.get_xbound())
+    # ax2.set_xlabel(r"${\rm Number~of~actions~}({\rm card}(\mathcal{A}))$", labelpad=10)
+    # ax2.set_xticklabels([None, '$16$', '$64$', '$256$', '$1024$', '$4096$', None])
+
+    ax.set_xlabel(r"${\rm Transmit~power~}(P){\rm ~in~ dBm}$")
+    ax.set_xticklabels([None, '$10$', '$20$', '$30$', '$40$', '$50$'])
+
+
+    ax.grid()
+
+    # Shrink current axis's height by 10% on the bottom
+    # box = ax.get_position()
+    # ax.set_position([box.x0, box.y0 + box.height * 0.01,
+    #                  box.width, box.height * 1])
+
+
+    ax.set_ylim([None, 1.])
+
+    # Put a legend below current axis
+    ax.legend(  # loc='upper center',
+        # bbox_to_anchor=(0.45, -0.2),
+        loc='upper right',
+        fancybox=True, shadow=True, ncol=2)
+
+    plt.savefig('./plots/sum-rate-varying-P-plot-normalized.pdf')
+    plt.savefig('./plots/sum-rate-varying-P-plot-normalized.png')
+    plt.show()
 
 
 if __name__ == "__main__":
@@ -180,6 +292,7 @@ if __name__ == "__main__":
         Exhaustive_rates[i], Random_rates[i], UCB_rates[i], DQN_rates[i], NSM_rates[i] = load_data(P)
 
     plot1()
+    plot2()
 
 
 
