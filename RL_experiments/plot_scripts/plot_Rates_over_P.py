@@ -125,7 +125,7 @@ def plot1():
 
 
     plt.rcParams["xtick.minor.visible"] = False
-    ax.set_xlabel(r"$P \ {\rm (dBm)}$")
+    ax.set_xlabel(r"${\rm Transmit~Power~}(P){\rm ~in~ (dBm)}$")
     #ax.set_xticklabels([None, '$10$', '$10$', '$30$', '$40$', '$50$', None, None])
 
 
@@ -157,8 +157,8 @@ def plot1():
 
     ax.indicate_inset_zoom(axins, edgecolor="black")
 
-    ax.legend(loc='lower right')
-    ax.set_ylim([-0.99, 5])
+    ax.legend(loc='lower right', ncol=3)
+    ax.set_ylim([-1.2, 5])
 
     plt.savefig('./plots/sum-rate-varying-P-plot-inset.pdf')
     plt.savefig('./plots/sum-rate-varying-P-plot-inset.png')

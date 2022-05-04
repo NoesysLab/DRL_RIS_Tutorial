@@ -144,7 +144,7 @@ def plot2():
     # ax.hlines(random_norm_rewards.mean(), x_lim_min, x_lim_max,
     #           colors=[(0, 0, 0)], linestyles='dashed', label=r'{\rm Random policy}')
 
-    ax.set_ylabel(r'{\rm Normalized Sum-Rate}')
+    ax.set_ylabel(r'{\rm Normalized Sum Rate}')
     #ax.set_xticks(np.arange(len(all_curve_data) - 2))
     #x.set_xticklabels([cd.label for cd in list(all_curve_data.values())[:-2]])
 
@@ -160,7 +160,7 @@ def plot2():
 
 
     plt.rcParams["xtick.minor.visible"] = False
-    ax.set_xlabel(r"${\rm Total~RIS~meta\mbox{-}atoms}~(N_{{\rm tot}})$")
+    ax.set_xlabel(r"${\rm Total~RIS~unit\mbox{-}elements}~(N_{{\rm tot}})$")
     ax.set_xticklabels([None, '$32$', '$64$', '$96$', '$128$', '$160$', None,])
 
 
@@ -169,7 +169,7 @@ def plot2():
     ax2 = ax.twiny()
     ax2.set_xticks( ax.get_xticks() )
     ax2.set_xbound(ax.get_xbound())
-    ax2.set_xlabel(r"${\rm Number~of~actions~}({\rm card}(\mathcal{A}))$")
+    ax2.set_xlabel(r"${\rm Number~of~actions~}({\rm card}(\mathcal{A}))$", labelpad=10)
     ax2.set_xticklabels([None, '$16$', '$64$', '$256$', '$1024$', '$4096$', None])
 
     ax.grid()

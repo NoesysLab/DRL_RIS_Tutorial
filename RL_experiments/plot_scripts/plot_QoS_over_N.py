@@ -119,13 +119,13 @@ def plot1():
 
 
 
-    ax.set_ylabel(r"${\rm Mean} \ {\rm Reward}$")
+    ax.set_ylabel(r"${\rm Reward}$")
 
 
 
 
     plt.rcParams["xtick.minor.visible"] = False
-    ax.set_xlabel(r"${\rm Total~RIS~meta\mbox{-}atoms}~(N_{{\rm tot}})$")
+    ax.set_xlabel(r"${\rm Total~RIS~unit\mbox{-}elements}~(N_{{\rm tot}})$")
     ax.set_xticklabels([None, '$32$', '$64$', '$96$', '$128$', '$160$', None, None])
 
 
@@ -134,7 +134,7 @@ def plot1():
     ax2 = ax.twiny()
     ax2.set_xticks( ax.get_xticks() )
     ax2.set_xbound(ax.get_xbound())
-    ax2.set_xlabel(r"${\rm Number~of~actions~}({\rm card}(\mathcal{A}))$")
+    ax2.set_xlabel(r"${\rm Number~of~actions~}({\rm card}(\mathcal{A}))$", labelpad=10)
     ax2.set_xticklabels([None, '$16$', '$64$', '$256$', '$1024$', '$4096$', None])
 
     ax.grid()
@@ -143,13 +143,13 @@ def plot1():
 
 
     # Shrink current axis's height by 10% on the bottom
-    box = ax.get_position()
-    ax.set_position([box.x0, box.y0 + box.height * 0.01,
-                     box.width, box.height * 1])
+    # box = ax.get_position()
+    # ax.set_position([box.x0, box.y0 + box.height * 0.01,
+    #                  box.width, box.height * 1])
 
     # Put a legend below current axis
-    ax.legend(loc='upper center', bbox_to_anchor=(0.45, -0.2),
-              fancybox=True, shadow=True, ncol=5)
+    ax.legend(bbox_to_anchor=(0.95, 0.85),
+              fancybox=True, shadow=True, ncol=1)
 
     plt.savefig('./plots/QoS-varying-N-plot.pdf')
     plt.show()

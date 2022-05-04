@@ -71,7 +71,7 @@ def load_data(N_contr):
 
 
 
-def multi_bar_plot(N_contr, df_exhaustive, df_random, df_UCB_channels, df_UCB_angles, df_DQN_channels, df_DQN_angles, df_NeuralSoftmax_channels, df_NeuralSoftmax_angles):
+def multi_bar_plot(N_contr, df_exhaustive, df_random, df_UCB_channels, df_UCB_angles, df_DQN_channels, df_DQN_angles, df_NeuralSoftmax_channels, df_NeuralSoftmax_angles, plot_legend):
 
 
 
@@ -177,12 +177,12 @@ def multi_bar_plot(N_contr, df_exhaustive, df_random, df_UCB_channels, df_UCB_an
     width = 0.35  # the width of the bars
 
     fig, ax = plt.subplots()
-    rects1 = ax.bar(x[:-1] - width / 2, channels_avg_rewards, width, label=r'{\rm Channels}', yerr=channel_std_rewards,
+    rects1 = ax.bar(x[:-1] - width / 2, channels_avg_rewards, width, label=r'{\rm Full CSI}', yerr=channel_std_rewards,
                     color=color_channels, hatch=hatch_channels,
                     #color=[all_curve_data['DQN'].color, all_curve_data['DRP'].color], hatch=hatch_channels
 
                     )
-    rects2 = ax.bar(x[:-1] + width / 2, angles_avg_rewards, width, label=r'{\rm AoDs}',yerr=angles_std_rewards,
+    rects2 = ax.bar(x[:-1] + width / 2, angles_avg_rewards, width, label=r'{\rm Partial CSI}',yerr=angles_std_rewards,
                     color=color_angles, hatch=hatch_angles,
                     #color=[all_curve_data['DQN'].color, all_curve_data['DRP'].color], hatch=hatch_angles,
                     )
@@ -200,14 +200,17 @@ def multi_bar_plot(N_contr, df_exhaustive, df_random, df_UCB_channels, df_UCB_an
     ax.hlines(random_norm_rewards.mean(), x_lim_min, x_lim_max,
               colors=[(0, 0, 0)], linestyles='dashed', label=r'{\rm Random policy}')
 
-    ax.set_ylabel(r'{\rm Normalized Sum-Rate}')
+    ax.set_ylabel(r'{\rm Normalized Sum Rate}')
     ax.set_xticks(np.arange(len(all_curve_data)-2))
     ax.set_xticklabels([cd.label for cd in  list(all_curve_data.values())[:-2]])
     ax.set_xlim([x_lim_min, x_lim_max])
 
-    handles, labels = plt.gca().get_legend_handles_labels()
-    order = [1,2,3,0]
-    ax.legend([handles[idx] for idx in order], [labels[idx] for idx in order], title=r'{\rm Observation Type}', loc='lower right')
+
+    if plot_legend:
+        handles, labels = plt.gca().get_legend_handles_labels()
+        order = [1,2,3,0]
+        ax.legend([handles[idx] for idx in order], [labels[idx] for idx in order],
+                  loc='upper right', ncol=2)
 
     plt.grid()
 
@@ -220,11 +223,13 @@ def multi_bar_plot(N_contr, df_exhaustive, df_random, df_UCB_channels, df_UCB_an
 if __name__ == '__main__':
     N_contr = 4
     df_exhaustive, df_random, df_UCB_channels, df_UCB_angles, df_DQN_channels, df_DQN_angles, df_NeuralSoftmax_channels, df_NeuralSoftmax_angles = load_data(N_contr)
-    multi_bar_plot(N_contr, df_exhaustive, df_random, df_UCB_channels, df_UCB_angles, df_DQN_channels, df_DQN_angles, df_NeuralSoftmax_channels, df_NeuralSoftmax_angles)
+    multi_bar_plot(N_contr, df_exhaustive, df_random, df_UCB_channels, df_UCB_angles, df_DQN_channels, df_DQN_angles, df_NeuralSoftmax_channels, df_NeuralSoftmax_angles,
+                   plot_legend=True)
 
     N_contr = 8
     df_exhaustive, df_random, df_UCB_channels, df_UCB_angles, df_DQN_channels, df_DQN_angles, df_NeuralSoftmax_channels, df_NeuralSoftmax_angles = load_data(N_contr)
-    multi_bar_plot(N_contr, df_exhaustive, df_random, df_UCB_channels, df_UCB_angles, df_DQN_channels, df_DQN_angles, df_NeuralSoftmax_channels, df_NeuralSoftmax_angles)
+    multi_bar_plot(N_contr, df_exhaustive, df_random, df_UCB_channels, df_UCB_angles, df_DQN_channels, df_DQN_angles, df_NeuralSoftmax_channels, df_NeuralSoftmax_angles,
+                   plot_legend=False)
 
 
 
